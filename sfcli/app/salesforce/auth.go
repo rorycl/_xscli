@@ -76,7 +76,7 @@ func InitiateLogin(ctx context.Context, cfg *oauth2.Config, tokenPath string) er
 func getNewTokenFromWeb(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, error) {
 	codeChan := make(chan string)
 	errChan := make(chan error)
-	server := &http.Server{Addr: ":8080/sf-callback"}
+	server := &http.Server{Addr: ":8080"}
 
 	http.HandleFunc("/sf-callback", func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
