@@ -3,3 +3,5 @@ SQLite
 cli: https://sqlite.org/cli.html
 
 downloads: https://sqlite.org/download.html
+
+date/time functions: https://sqlite.org/lang_datefunc.html
