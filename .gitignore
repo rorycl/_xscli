@@ -1,6 +1,9 @@
 xerocli/config.yaml
 xerocli/xerocli
 
+sfcli/config.yaml
+sfcli/sfcli
+
 # storage
 reconciliation.db
 xero_token.json
