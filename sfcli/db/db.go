@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sfcli/app/salesforce"
 
-	_ "github.com/duckdb/duckdb-go/v2"
+	_ "modernc.org/sqlite" // Import the pure Go SQLite driver
 )
 
 // DB provides a wrapper around the sql.DB connection for application-specific database operations.
@@ -14,9 +14,10 @@ type DB struct {
 	*sql.DB
 }
 
-// New creates a new connection to a DuckDB database at the given path.
+// New creates a new connection to an SQLite database at the given path.
+// It enables WAL mode for better concurrency and foreign key support.
 func New(path string) (*DB, error) {
-	db, err := sql.Open("duckdb", path)
+	db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)", path))
 	if err != nil {
 		return nil, err
 	}
