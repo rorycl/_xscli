@@ -39,12 +39,12 @@ func (a *App) Wipe(ctx context.Context, cfgPath string) error {
 	}
 
 	log.Printf("Deleting token file at: %s", cfg.TokenFilePath)
-	if err := os.Remove(cfg.TokenFilePath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(cfg.TokenFilePath); err != nil {
 		return fmt.Errorf("failed to delete token file: %w", err)
 	}
 
 	log.Printf("Deleting database file at: %s", cfg.DatabasePath)
-	if err := os.Remove(cfg.DatabasePath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(cfg.DatabasePath); err != nil {
 		return fmt.Errorf("failed to delete database file: %w", err)
 	}
 
@@ -74,6 +74,10 @@ func (a *App) sync(ctx context.Context, cfgPath string, fromDate, ifModifiedSinc
 	if fromDate.IsZero() {
 		fromDate = cfg.FinancialYearStart
 		log.Printf("No --fromDate specified, using default from config: %s", fromDate.Format("2006-01-02"))
+	}
+
+	if !ifModifiedSince.IsZero() {
+		log.Printf("Only retrieving records modified since: %s", ifModifiedSince.Format(time.RFC1123))
 	}
 
 	xeroClient, err := xero.NewClient(ctx, cfg.OAuth2Config, cfg.TokenFilePath)

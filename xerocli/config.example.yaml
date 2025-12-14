@@ -6,7 +6,7 @@ client_id: "YOUR_XERO_CLIENT_ID"
 client_secret: "YOUR_XERO_CLIENT_SECRET"
 
 # Default paths used by the application.
-# The 'wipe' command will target these files.
+# The 'wipe' command will delete these files from disk.
 token_file_path: "./xero_token.json"
 database_path: "./reconciliation.db"
 

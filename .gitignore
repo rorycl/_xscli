@@ -1,2 +1,7 @@
 xerocli/config.yaml
 xerocli/xerocli
+
+# storage
+reconciliation.db
+xero_token.json
+
