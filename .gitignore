@@ -7,4 +7,8 @@ sfcli/sfcli
 # storage
 reconciliation.db
 xero_token.json
+sf_token.json
+
+# bin files
+bin
 
