@@ -5,54 +5,61 @@
 {{ define "nav" }}
 <div class="flex items-center space-x-4 text-sm font-medium">
     <a href="/home" class="text-sky-700 border-b-2 border-sky-700 pb-1">Home</a>
-    <a href="/refresh" class="text-slate-500 hover:text-sky-700">Refresh</a>
-    <a href="/connect" class="text-slate-500 hover:text-sky-700">Logout</a>
+    <a href="/refresh" class="text-slate-500 border-b-2 border-transparent pb-1 hover:text-sky-700">Refresh</a>
+    <a href="/connect" class="text-slate-500 border-b-2 border-transparent pb-1 hover:text-sky-700">Logout</a>
 </div>
 {{ end }}
 
 {{ define "content" }}
-<div class="bg-white p-6 rounded-lg shadow-md border border-slate-200">
+
+<div class="bg-white p-6 rounded-lg shadow-md border border-slate-400">
     <!-- Financial Year Selector -->
     <div class="mb-4 text-sm">
         Showing data for the <span class="font-bold">2025</span> financial year. <a href="#" class="text-sky-600 hover:underline">Change financial year</a>.
     </div>
 
     <!-- Tabs -->
-    <div class="border-b border-slate-200 mb-4">
+    <div class="border-b border-slate-300 mb-2 border-b-2">
         <nav class="-mb-px flex space-x-6" aria-label="Tabs">
-            <a href="/home" class="border-sky-600 text-sky-700 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm">Xero Invoices</a>
-            <a href="#" class="border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm">Xero Bank Transactions</a>
-            <a href="#" class="border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm">Salesforce Donations</a>
+            <!-- <a href="/home" class="border-sky-600 text-sky-700 whitespace-nowrap py-3 px-4  border-b-4 font-medium">Xero Invoices</a> -->
+            <a href="/home" class="border-sky-600 mb-0 rounded-md text-sky-700 whitespace-nowrap py-3 px-4 border-2 border-b-white border-b-4 borderfont-medium">Xero Invoices</a>
+            <a href="#" class="bg-slate-100 text-slate-500 mb-0 rounded-md border-transparent hover:text-slate-700 hover:whitespace-nowrap py-3 px-4 border-b-4 font-medium">Xero Bank Transactions</a>
+            <a href="#" class="bg-slate-100 text-slate-500 mb-0 rounded-md border-transparent hover:text-slate-700 hover:whitespace-nowrap py-3 px-4 border-b-4 font-medium">Salesforce Donations</a>
         </nav>
     </div>
 
     <!-- Search Form -->
-    <form class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end text-sm mb-6 p-4 bg-slate-50 rounded-md border">
+    <form class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end text-sm mt-6 mb-6 p-4 bg-slate-100 rounded-md border border-slate-400">
         <div>
-            <label for="status" class="block font-medium text-slate-700">Status</label>
-            <select id="status" name="status" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500">
+            <label for="status" class="block font-medium text-slate-700 pb-2">Status</label>
+            <select id="status" name="status" class="border mt-1 block w-full border-slate-300 shadow-sm bg-white focus:border-sky-500 p-1 focus:ring-sky-500">
                 <option>Unreconciled</option>
                 <option>Reconciled</option>
                 <option>All</option>
             </select>
         </div>
         <div>
-            <label for="date-from" class="block font-medium text-slate-700">Date From</label>
-            <input type="date" id="date-from" name="date-from" value="2025-07-01" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500">
+            <label for="date-from" class="block font-medium text-slate-700 pb-2">Date From</label>
+            <input type="date" id="date-from" name="date-from" value="2025-07-01" class="border mt-1 block w-full border-slate-300 shadow-sm p-1 focus:border-sky-500 focus:ring-sky-500">
         </div>
         <div>
-            <label for="date-to" class="block font-medium text-slate-700">Date To</label>
-            <input type="date" id="date-to" name="date-to" value="2026-06-30" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500">
+            <label for="date-to" class="block font-medium text-slate-700 pb-2">Date To</label>
+            <input type="date" id="date-to" name="date-to" value="2026-06-30" class="border mt-1 block w-full border-slate-300 shadow-sm p-1 focus:border-sky-500 focus:ring-sky-500">
         </div>
-        <div class="md:col-span-2">
-            <button type="submit" class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded hover:bg-sky-700 transition-colors">Search Invoices</button>
+        <div class="md:col-span-1">
+            <label for="search" class="block font-medium text-slate-700 pb-2">Search Text</label>
+            <input type="text" id="search" name="search" value="" class="border mt-1 block w-full border-slate-300 shadow-sm p-1 focus:border-sky-500 focus:ring-sky-500">
+        </div>
+        <div class="md:col-span-1">
+            <button type="submit" class="bg-slate-400 text-white font-bold py-2 px-4 rounded hover:bg-sky-700 transition-colors">Reset</button>
+            <button type="submit" class="float-right w-1/2 bg-sky-600 text-white font-bold py-2 px-4 rounded hover:bg-sky-700 transition-colors">Search</button>
         </div>
     </form>
 
     <!-- Results Table -->
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
-            <thead class="bg-slate-50">
+    <div class="overflow-x-auto rounded-md border border-slate-400">
+        <table class="min-w-full divide-y divide-slate-300 text-sm">
+            <thead class="bg-slate-100">
                 <tr>
                     <th class="px-4 py-3 text-left font-semibold text-slate-600">No.</th>
                     <th class="px-4 py-3 text-left font-semibold text-slate-600">Date</th>
@@ -63,16 +70,16 @@
                     <th class="px-4 py-3 text-center font-semibold text-slate-600">Status</th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-slate-200">
+            <tbody class="bg-white divide-y divide-slate-300">
                 {{ range .Invoices }}
                 <tr class="hover:bg-slate-50">
-                    <td class="px-4 py-3"><a href="/invoice/{{ .UUID }}" class="text-sky-600 hover:underline">{{ .InvoiceNumber }}</a></td>
-                    <td class="px-4 py-3 whitespace-nowrap">{{ .Date.Format "02/01/2006" }}</td>
-                    <td class="px-4 py-3">{{ .ContactName }}</td>
-                    <td class="px-4 py-3 max-w-xs truncate">{{ .Description }}</td>
-                    <td class="px-4 py-3 text-right font-mono">{{ printf "%.2f" .Total }}</td>
-                    <td class="px-4 py-3 text-right font-mono">{{ printf "%.2f" .DonationsTotal }}</td>
-                    <td class="px-4 py-3 text-center">
+                    <td class="px-4 py-2"><a href="/invoice" class="text-sky-600 hover:underline">{{ .InvoiceNumber }}</a></td>
+                    <td class="px-4 py-2 whitespace-nowrap">{{ .Date.Format "02/01/2006" }}</td>
+                    <td class="px-4 py-2">{{ .ContactName }}</td>
+                    <td class="px-4 py-2 max-w-xs truncate">{{ .Description }}</td>
+                    <td class="px-4 py-2 text-right font-mono">{{ printf "%.2f" .Total }}</td>
+                    <td class="px-4 py-2 text-right font-mono">{{ printf "%.2f" .DonationsTotal }}</td>
+                    <td class="px-4 py-2 text-center">
                         {{ if .IsReconciled }}
                         <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">OK</span>
                         {{ else }}
@@ -86,8 +93,8 @@
     </div>
 
     <!-- Pagination -->
-    <div class="mt-6 text-center text-sm text-slate-600">
-        Page &lt;1&gt; of &lt;1&gt;
+    <div class="my-6 text-right text-sm text-slate-600">
+        Page 1 of 1
     </div>
 </div>
 {{ end }}
