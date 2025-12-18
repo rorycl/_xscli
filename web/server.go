@@ -50,13 +50,12 @@ type Donation struct {
 
 func rebuildTailwind() error {
 	log.Println("rebulding tailwind")
-	cmdArgs := `run --rm --name tailwindcss-builder -v %s:/project d3fk/tailwindcss:stable -i static/css/input.css -o static/css/output.css`
 	curDir, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
-	args := fmt.Sprintf(cmdArgs, curDir)
-	cmd := exec.Command("/usr/bin/docker", strings.Split(args, " ")...)
+	cmdArgs := strings.Split(fmt.Sprintf(`docker run --rm --name tailwindcss-builder -v %s:/project d3fk/tailwindcss:stable -i static/css/input.css -o static/css/output.css`, curDir), " ")
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 	out, err := cmd.CombinedOutput()
 	log.Println(string(out))
 	return err
