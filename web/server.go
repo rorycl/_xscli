@@ -19,9 +19,6 @@ import (
 )
 
 // --- DUMMY DATA STRUCTURES ---
-// These structs represent the data models for the application.
-// In a real application, these would live in an `internal/models` package
-// and be populated from a database.
 
 type Invoice struct {
 	UUID            string
@@ -67,14 +64,7 @@ type Donation struct {
 
 func rebuildTailwind() error {
 	log.Println("rebulding tailwind")
-	/*
-		curDir, err := os.Getwd()
-		if err != nil {
-			log.Fatal(err)
-		}
-		cmdArgs := strings.Split(fmt.Sprintf(`docker run --rm --name tailwindcss-builder -v %s:/project d3fk/tailwindcss:stable -i static/css/input.css -o static/css/output.css`, curDir), " ")
-	*/
-	cmdArgs := strings.Split(`/home/rory/bin/tailwindcss-linux-x64-v4.0.7 -i static/css/input.css -o static/css/output.css`, " ")
+	cmdArgs := strings.Split(`tailwindcss-linux-x64-v4.0.7 -i static/css/input.css -o static/css/output.css`, " ")
 	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 	out, err := cmd.CombinedOutput()
 	log.Println(string(out))
