@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"sfcli/app" // Import the app package to access config structs
+	"sfcli/config"
 )
 
 // Client is a wrapper for making authenticated calls to the Salesforce API.
@@ -20,7 +20,7 @@ type Client struct {
 	httpClient  *http.Client
 	instanceURL string
 	apiVersion  string
-	config      app.SalesforceConfig
+	config      config.SalesforceConfig
 }
 
 // GetOpportunities fetches records from Salesforce using the configurable SOQL query.
@@ -55,7 +55,7 @@ func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince
 	return response.Records, nil
 }
 
-// BatchUpdateOpportunityRefs performs a batch update using the Salesforce Composite API.
+// BatchUpdateOpportunityRefs performs a update using the Salesforce Composite API.
 func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference string, ids []string) error {
 	if len(ids) > 25 {
 		return fmt.Errorf("cannot update more than 25 records in a single batch")
@@ -69,8 +69,9 @@ func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference strin
 	for i, id := range ids {
 		batchRequest.Requests[i] = Subrequest{
 			Method: "PATCH",
-			URL:    fmt.Sprintf("/services/data/%s/sobjects/Opportunity/%s", c.apiVersion, id),
-			Body:   map[string]string{"Payout_Reference__c": reference},
+			// URL:    fmt.Sprintf("/services/data/%s/sobjects/Opportunity/%s", c.apiVersion, id),
+			URL:  fmt.Sprintf("/services/data/%s/composite/sobjects/Opportunity/%s", c.apiVersion, id),
+			Body: map[string]string{"Payout_Reference__c": reference},
 		}
 	}
 
@@ -78,6 +79,7 @@ func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference strin
 	if err != nil {
 		return fmt.Errorf("failed to marshal batch request: %w", err)
 	}
+	_ = os.WriteFile("batchRequest", body, 0644)
 
 	requestURL := fmt.Sprintf("%s/services/data/%s/composite/batch", c.instanceURL, c.apiVersion)
 	req, err := c.newRequest(ctx, "POST", requestURL, body)

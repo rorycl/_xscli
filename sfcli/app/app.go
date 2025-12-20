@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"sfcli/app/salesforce"
+	"sfcli/config"
 	"sfcli/db"
 )
 
@@ -23,7 +24,7 @@ func New() *App {
 // Login orchestrates the OAuth2 login flow.
 // It loads configuration and initiates the interactive authentication process.
 func (a *App) Login(ctx context.Context, cfgPath string) error {
-	cfg, err := LoadConfig(cfgPath)
+	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
 		return err
 	}
@@ -33,7 +34,7 @@ func (a *App) Login(ctx context.Context, cfgPath string) error {
 // Wipe removes local data for security and confidentiality.
 // It deletes the OAuth2 token file and the DuckDB database file.
 func (a *App) Wipe(ctx context.Context, cfgPath string) error {
-	cfg, err := LoadConfig(cfgPath)
+	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
 		return err
 	}
@@ -55,7 +56,7 @@ func (a *App) Wipe(ctx context.Context, cfgPath string) error {
 // SyncOpportunities fetches Opportunity records from Salesforce and persists them to the database.
 // It handles filtering by a date range and incremental updates.
 func (a *App) SyncOpportunities(ctx context.Context, cfgPath string, fromDate, ifModifiedSince time.Time) error {
-	cfg, err := LoadConfig(cfgPath)
+	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func (a *App) SyncOpportunities(ctx context.Context, cfgPath string, fromDate, i
 		log.Printf("No --fromDate specified, using default from config: %s", fromDate.Format("2006-01-02"))
 	}
 
-	sfClient, err := salesforce.NewClient(ctx, cfg.Salesforce.OAuth2Config, cfg.TokenFilePath)
+	sfClient, err := salesforce.NewClient(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create Salesforce client: %w", err)
 	}
@@ -98,12 +99,12 @@ func (a *App) SyncOpportunities(ctx context.Context, cfgPath string, fromDate, i
 // BatchUpdateOpportunityRefs updates the Payout_Reference__c field for multiple opportunities.
 // It uses the efficient Salesforce Composite Batch API.
 func (a *App) BatchUpdateOpportunityRefs(ctx context.Context, cfgPath, reference string, ids []string) error {
-	cfg, err := LoadConfig(cfgPath)
+	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
 		return err
 	}
 
-	sfClient, err := salesforce.NewClient(ctx, cfg.Salesforce.OAuth2Config, cfg.TokenFilePath)
+	sfClient, err := salesforce.NewClient(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create Salesforce client: %w", err)
 	}

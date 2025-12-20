@@ -74,9 +74,9 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 	// Define the set of fields that are already handled by CoreFields.
 	// This includes "attributes" which is metadata sent by Salesforce in every record.
 	coreFieldNames := map[string]bool{
-		"Id": "true", "Name": "true", "Amount": "true", "CloseDate": "true",
-		"CreatedDate": "true", "LastModifiedDate": "true", "CreatedBy": "true",
-		"LastModifiedBy": "true", "Payout_Reference__c": "true", "attributes": "true",
+		"Id": true, "Name": true, "Amount": true, "CloseDate": true,
+		"CreatedDate": true, "LastModifiedDate": true, "CreatedBy": true,
+		"LastModifiedBy": true, "Payout_Reference__c": true, "attributes": true,
 	}
 
 	// Populate the AdditionalFields map with any fields not in the core set.
@@ -103,7 +103,7 @@ func (r *Record) UnmarshalJSON(data []byte) error {
 
 // BatchRequest is the structure for a Salesforce Composite Batch API request.
 type BatchRequest struct {
-	AllOrNone bool         `json:"binary"`
+	AllOrNone bool         `json:"allOrNone"`
 	Requests  []Subrequest `json:"batchRequests"`
 }
 
