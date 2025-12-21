@@ -16,8 +16,10 @@ salesforce:
     FROM Opportunity
     WHERE {{.WhereClause}}
 
-  # Optional: Map API field names from the query to user-friendly local names.
-  # These will be available in the AdditionalFields map for use in templates.
+  # Optional: field_mappings map API field names from the query to user-friendly local names.
+  # There are optional additional fields to show in the UI via templates
+  # and are not easily searchable as part of the core Opportunity/Donation object.
+  # These are in AdditionalFields map for use in templates.
   # Note: Relationship query names are flattened, e.g., Account.Name becomes AccountName.
   field_mappings:
     StageName: Stage
