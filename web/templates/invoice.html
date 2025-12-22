@@ -16,23 +16,19 @@
 <!-- Invoice Header Panel -->
 <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-300 text-sm text-slate-800">
 
-    <!-- Breadcrumb -->
-    <div class="text-sm text-slate-600 mb-2">
-        <a href="/home" class="hover:underline">&#171; Invoices</a>
-    </div>
-
-    <h2 class="text-lg font-semibold mb-2">
-    Invoice Details for {{ .Invoice.InvoiceNumber }}
-    </h2>
+    <!-- breadcrumb and invoice -->
+    <h3 class="text-l text-slate-800 font-semibold pb-3 pt-0">
+        <a href="/home" class="hover:underline">Invoices</a> &raquo; Details for invoice {{ .Invoice.InvoiceNumber }}
+    </h3>
     
     <!-- invoice panel -->
-    <div class="overflow-x-auto text-sm text-black rounded-md border border-slate-300 pt-4 px-4 bg-slate-100">
+    <div class="overflow-x-auto text-sm text-black rounded-md border border-slate-400 pt-4 px-4 bg-slate-100">
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-1 mb-4">
             <div>
                 <h3 class="text-xs text-slate-800 font-semibold">Number</h3>
                 <p><span class="pr-2">{{ .Invoice.InvoiceNumber }}</span>
-                    <a href="#" class="text-sky-700 hover:underline">view in Xero</a>
+                    <a href="#" class="text-sky-700 font-semibold hover:underline">view in Xero</a>
                 </p>
             </div>
             <div>
@@ -57,7 +53,7 @@
     <!-- Line Items Table -->
     <h3 class="text-l text-slate-800 font-semibold py-3">Invoice Line Items</h3>
 
-    <div class="overflow-x-auto rounded-md border border-slate-300">
+    <div class="overflow-x-auto rounded-md border border-slate-400">
         <table class="min-w-full divide-y divide-slate-300 text-xs text-slate-800">
             <thead class="bg-indigo-100">
                 <tr>
@@ -89,7 +85,7 @@
     <h3 class="text-l text-slate-800 font-semibold py-3">Linked Salesforce Donations</h3>
 
     <!-- Linked Donations Panel -->
-    <div class="overflow-x-auto rounded-md border border-slate-300">
+    <div class="overflow-x-auto rounded-md border border-slate-400">
         <table class="min-w-full divide-y divide-slate-300 text-xs">
             <thead class="bg-indigo-100">
                 <tr>
@@ -128,12 +124,11 @@
 </div>
 
 <!-- Search for Donations Panel -->
-<div class="bg-white p-4 rounded-lg shadow-md border border-slate-400">
-    <div class="flex justify-between items-center">
-        <h2 class="text-l font-semibold">Find Salesforce Donations to Link</h2>
-    </div>
+<div class="bg-white p-4 rounded-lg shadow-md border border-slate-300 text-sm">
 
-    <div class="my-4 bg-slate-100 rounded-md border-1 border-slate-300">
+    <h3 class="text-l text-slate-800 font-semibold">Find Salesforce Donations to Link</h3>
+
+    <div class="my-4 bg-slate-100 rounded-md border-1 border-slate-400">
         <form class="mx-4 my-1 mb-3 grid grid-cols-1 text-sm md:grid-cols-5 gap-4 items-end text-sm mb-4">
             <div>
                 <label for="status" class="block font-semibold text-xs text-slate-700 pb-1 mt-1">Status</label>
@@ -161,19 +156,20 @@
             </div>
         </form>
 
-    <!-- Search Results -->
-    <div class="border-b border-dotted border-2 border-slate-400 mb-1"></div>
+        <div class="border-t-2 border-dotted border-slate-400 bg-slate-100"></div>
+        <!-- <div class="border-b border-dotted border-2 border-slate-400 mb-1"></div> -->
 
+        <!-- Search Results -->
         <table class="min-w-full divide-y divide-slate-300 text-xs">
             <!-- <table class="min-w-full divide-y divide-slate-200 text-sm"> -->
             <thead class="bg-slate-100 mt-2">
-                <tr class="uppercase text-slate-600">
+                <tr class="text-slate-700">
                 <th class="px-4 py-1 w-8">
                 <button class="text-xs bg-sky-600 text-white font-bold py-1 px-1 mr-2 rounded hover:bg-sky-700">Link</button>
                 </th>
-                <th class="px-4 py-1 text-left font-semibold text-slate-600">Contact</th>
-                <th class="px-4 py-1 text-left font-semibold text-slate-600">Description</th>
-                <th class="px-4 py-1 text-right font-semibold text-slate-600">Amount</th>
+                <th class="px-4 py-1 text-left font-semibold">Contact</th>
+                <th class="px-4 py-1 text-left font-semibold">Description</th>
+                <th class="px-4 py-1 text-right font-semibold">Amount</th>
             </tr></thead>
             <tbody class="bg-white divide-y divide-slate-300">
                 {{ range .Donations }}
@@ -186,7 +182,8 @@
                 {{ end }}
             </tbody>
         </table>
+
+    <!-- end of find salesforce donations wrapper -->
     </div>
-</div>
 </div>
 {{ end }}
