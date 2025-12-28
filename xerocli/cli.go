@@ -15,7 +15,6 @@ type Applicator interface {
 	Wipe(ctx context.Context, cfgPath string) error
 	SyncBankTransactions(ctx context.Context, cfgPath string, fromDate, ifModifiedSince time.Time) error
 	SyncInvoices(ctx context.Context, cfgPath string, fromDate, ifModifiedSince time.Time) error
-	UpdateBankTransactionReference(ctx context.Context, cfgPath, uuid, reference string) error
 }
 
 // BuildCLI creates the full CLI command structure for the application.
@@ -94,25 +93,11 @@ func BuildCLI(app Applicator) *cli.Command {
 		},
 	}
 
-	updateRefCmd := &cli.Command{
-		Name:    "bank-transaction-reference",
-		Usage:   "Update the reference of a single bank transaction",
-		Aliases: []string{"btref"},
-		Flags: []cli.Flag{
-			configFlag,
-			&cli.StringFlag{Name: "uuid", Usage: "the UUID of the bank transaction to update", Required: true},
-			&cli.StringFlag{Name: "ref", Usage: "the new reference value to set", Required: true},
-		},
-		Action: func(ctx context.Context, c *cli.Command) error {
-			return app.UpdateBankTransactionReference(ctx, c.String("config"), c.String("uuid"), c.String("ref"))
-		},
-	}
-
 	// Assemble the root command.
 	rootCmd := &cli.Command{
 		Name:     "xerocli",
 		Usage:    "A CLI tool for interacting with the Xero API",
-		Commands: []*cli.Command{loginCmd, wipeCmd, bankTransactionsCmd, invoicesCmd, updateRefCmd},
+		Commands: []*cli.Command{loginCmd, wipeCmd, bankTransactionsCmd, invoicesCmd},
 	}
 
 	return rootCmd
