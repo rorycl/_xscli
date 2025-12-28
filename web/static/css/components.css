@@ -8,4 +8,7 @@
         /* @apply text-slate-700 text-xs text-left font-semibold block pb-1; */
         @apply  block font-semibold text-xs text-slate-700 pb-1;
     }
+    .invoice-labels {
+        @apply text-xs text-slate-800 font-semibold;
+    }
 }
