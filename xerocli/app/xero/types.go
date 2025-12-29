@@ -157,3 +157,51 @@ func (inv *Invoice) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+
+// AccountResponse is the top-level structure of the /Accounts API response.
+type AccountResponse struct {
+	Accounts []Account `json:"Accounts"`
+}
+
+// Account represents a single account record.
+type Account struct {
+	AccountID               string `json:"AccountID"`
+	Code                    string `json:"Code"`
+	Name                    string `json:"Name"`
+	Type                    string `json:"Type"`
+	TaxType                 string `json:"TaxType"`
+	EnablePaymentsToAccount bool   `json:"EnablePaymentsToAccount"`
+	Status                  string `json:"Status"`
+	UpdatedDateUTC          string `json:"UpdatedDateUTC"`
+
+	// optional
+	BankAccountNumber string `json:"BankAccountNumber,omitempty"`
+	BankAccountType   string `json:"BankAccountType,omitempty"`
+	CurrencyCode      string `json:"CurrencyCode,omitempty"`
+	Description       string `json:"Description,omitempty"`
+	SystemAccount     string `json:"SystemAccount,omitempty"`
+
+	// set from UpdatedDateUTC
+	Updated time.Time `json:"-"`
+}
+
+// UnmarshalJSON provides custom JSON decoding for the Account type.
+// It parses Xero's specific date formats into standard time.Time objects.
+func (acc *Account) UnmarshalJSON(data []byte) error {
+	type accountAlias Account
+	alias := &accountAlias{}
+
+	if err := json.Unmarshal(data, alias); err != nil {
+		return err
+	}
+	*acc = Account(*alias)
+
+	var err error
+	if acc.UpdatedDateUTC != "" {
+		acc.Updated, err = parseXeroDate(acc.UpdatedDateUTC)
+		if err != nil {
+			return fmt.Errorf("failed to parse Account.UpdatedDateUTC: %w", err)
+		}
+	}
+	return nil
+}

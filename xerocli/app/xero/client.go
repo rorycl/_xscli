@@ -110,6 +110,41 @@ func (c *Client) GetInvoices(ctx context.Context, fromDate, ifModifiedSince time
 	return allInvoices, nil
 }
 
+// GetAccounts fetches accounts from Xero, applying appropriate filters.
+func (c *Client) GetAccounts(ctx context.Context, ifModifiedSince time.Time) ([]Account, error) {
+	var allAccounts []Account
+	page := 1
+
+	for {
+		params := url.Values{}
+		params.Add("page", fmt.Sprintf("%d", page))
+		requestURL := fmt.Sprintf("%s/Accounts?%s", baseURL, params.Encode())
+
+		req, err := c.newRequest(ctx, "GET", requestURL, ifModifiedSince, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var response AccountResponse
+		resp, err := c.do(req, &response)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute request for page %d: %w", page, err)
+		}
+
+		if resp.StatusCode == http.StatusNotModified {
+			break
+		}
+		if len(response.Accounts) == 0 {
+			break
+		}
+
+		allAccounts = append(allAccounts, response.Accounts...)
+		page++
+	}
+
+	return allAccounts, nil
+}
+
 // GetBankTransactionByID fetches a single bank transaction by its UUID.
 func (c *Client) GetBankTransactionByID(ctx context.Context, uuid string) (BankTransaction, error) {
 	requestURL := fmt.Sprintf("%s/BankTransactions/%s", baseURL, uuid)
