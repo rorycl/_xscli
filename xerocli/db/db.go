@@ -171,3 +171,32 @@ func (db *DB) UpsertInvoices(invoices []xero.Invoice) error {
 
 	return tx.Commit()
 }
+
+// UpsertAccounts performs a transactional upsert for a slice of Account.
+func (db *DB) UpsertAccounts(accounts []xero.Account) error {
+	if len(accounts) == 0 {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	accStmt, err := tx.PrepareContext(context.Background(), accUpsertSQL)
+	if err != nil {
+		return fmt.Errorf("failed to prepare accounts upsert statement: %w", err)
+	}
+	defer accStmt.Close()
+
+	for _, acc := range accounts {
+		_, err := accStmt.ExecContext(context.Background(),
+			acc.AccountID, acc.Code, acc.Name, acc.Description, acc.Type,
+			acc.TaxType, acc.Status, acc.SystemAccount, acc.CurrencyCode, acc.Updated,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to upsert account %s: %w", acc.AccountID, err)
+		}
+	}
+	return tx.Commit()
+}

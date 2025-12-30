@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS bank_transaction_line_items (
     quantity        REAL,
     unit_amount     REAL,
     line_amount     REAL,
-    account_code    TEXT,
+    account_code    TEXT, -- consider linking to accounts
     tax_amount      REAL,
     FOREIGN KEY(transaction_id) REFERENCES bank_transactions(id) ON DELETE CASCADE
 );
@@ -52,9 +52,26 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
     quantity        REAL,
     unit_amount     REAL,
     line_amount     REAL,
-    account_code    TEXT,
+    account_code    TEXT, -- consider linking to accounts
     tax_amount      REAL,
     FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+);
+
+/*
+For accounts only the name is likely to be needed. However some fields,
+such as currency_code may be needed in future.
+*/
+CREATE TABLE IF NOT EXISTS accounts (
+   id             TEXT PRIMARY KEY,
+   code           TEXT,
+   name           TEXT,
+   description    TEXT,
+   type           TEXT,
+   tax_type       TEXT,
+   status         TEXT,
+   system_account TEXT,
+   currency_code  TEXT,
+   updated_at     DATETIME
 );
 `
 
@@ -111,4 +128,21 @@ const invLineDeleteSQL = `DELETE FROM invoice_line_items WHERE invoice_id = ?;`
 const invLineInsertSQL = `
 INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_amount, line_amount, account_code, tax_amount)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+`
+
+// accUpsertSQL is the SQL statement for inserting or updating an account in SQLite.
+const accUpsertSQL = `
+INSERT INTO accounts (id, code, name, description, type, tax_type, status, system_account, currency_code, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (id) DO UPDATE SET
+   id = excluded.id,
+   code = excluded.code,
+   name = excluded.name,
+   description = excluded.description,
+   type = excluded.type,
+   tax_type = excluded.tax_type,
+   status = excluded.status,
+   system_account = excluded.system_account,
+   currency_code = excluded.currency_code,
+   updated_at = excluded.updated_at;
 `
