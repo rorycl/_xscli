@@ -31,7 +31,7 @@ func (a *App) Login(ctx context.Context, cfgPath string) error {
 }
 
 // Wipe removes local data for security and confidentiality.
-// It deletes the OAuth2 token file and the DuckDB database file.
+// It deletes the OAuth2 token file and the database file.
 func (a *App) Wipe(ctx context.Context, cfgPath string) error {
 	cfg, err := LoadConfig(cfgPath)
 	if err != nil {
