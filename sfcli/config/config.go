@@ -24,13 +24,18 @@ type RootConfig struct {
 
 // SalesforceConfig holds Salesforce-specific settings, including the query configuration.
 type SalesforceConfig struct {
-	LoginDomain      string            `yaml:"login_domain"`
-	ClientID         string            `yaml:"client_id"`
-	ClientSecret     string            `yaml:"client_secret"`
-	Query            string            `yaml:"query"`
-	FieldMappings    map[string]string `yaml:"field_mappings"`
-	LinkingFieldName string            `yaml:"linking_field_name"`
-	OAuth2Config     *oauth2.Config
+	LoginDomain   string            `yaml:"login_domain"`
+	ClientID      string            `yaml:"client_id"`
+	ClientSecret  string            `yaml:"client_secret"`
+	Query         string            `yaml:"query"`
+	FieldMappings map[string]string `yaml:"field_mappings"`
+
+	// Distributed Foreign Key (DFK) object and field.
+	LinkingObject    string `yaml:"linking_object"`
+	LinkingFieldName string `yaml:"linking_field_name"`
+
+	// Oauth2
+	OAuth2Config *oauth2.Config
 }
 
 // LoadConfig loads and validates the configuration from the given file path.
@@ -83,6 +88,9 @@ func validateAndPrepareConfig(c *RootConfig) error {
 	}
 	if c.DateRangeStartStr == "" {
 		return fmt.Errorf("date_range_start is missing")
+	}
+	if c.Salesforce.LinkingObject == "" {
+		return fmt.Errorf("linking object name is missing")
 	}
 	if c.Salesforce.LinkingFieldName == "" {
 		return fmt.Errorf("linking field name is missing")

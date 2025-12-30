@@ -36,6 +36,13 @@ func TestLoadConfig(t *testing.T) {
 	}
 	rc.Salesforce.Query = old
 
+	old = rc.Salesforce.LinkingObject
+	rc.Salesforce.LinkingObject = ""
+	if err := validateAndPrepareConfig(rc); err == nil {
+		t.Errorf("expected validation error for LinkingObject")
+	}
+	rc.Salesforce.LinkingObject = old
+
 	old = rc.Salesforce.LinkingFieldName
 	rc.Salesforce.LinkingFieldName = ""
 	if err := validateAndPrepareConfig(rc); err == nil {

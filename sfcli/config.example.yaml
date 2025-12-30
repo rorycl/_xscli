@@ -28,8 +28,11 @@ salesforce:
     CreatedByName: CreatedBy
     LastModifiedByName: ModifiedBy
 
-  # link_field_name is the field name to target for distributed foreign
-  # key (DFK) updates.
+  # linking_object and linking_field_name are the object and field name
+  # to target for distributed foreign key (DFK) updates. It is very
+  # important that the "id" in BatchUpdateOpportunityRefs (client.go)
+  # accords with the object specified here.
+  linking_object: "Opportunity"
   linking_field_name: "Payout_Reference__c"
 
 # Default paths used by the application
