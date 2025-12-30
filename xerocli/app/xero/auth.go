@@ -12,6 +12,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var connectionsURL = "https://api.xero.com/connections"
+
 // NewClient handles the OAuth2 flow to return an authenticated http.Client.
 // It attempts to use a saved token first and will refresh it if necessary.
 // If no token exists, it will fail, requiring the user to run the `login` command.
@@ -143,7 +145,7 @@ func DeleteToken(path string) error {
 
 // getTenantID fetches the list of connections and returns the first TenantID found.
 func getTenantID(ctx context.Context, client *http.Client) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.xero.com/connections", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", connectionsURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create connections request: %w", err)
 	}
