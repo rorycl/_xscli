@@ -41,18 +41,38 @@ func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince
 	// Dump the final query for debugging purposes.
 	_ = os.WriteFile("salesforce_query.log", []byte(finalSOQL), 0644)
 
+	// Salesforce sobject queries provide at most 2000 records in a batch. Subsequent
+	// query paths are represented by response.NextRecordsURL. If there are no more
+	// records to retrieve this URL will be empty and response.Done will be true.
+	// See https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_query.htm
+	// and https://help.salesforce.com/s/articleView?id=000386264&type=1 for more info.
+	//
+	// requestURL is the initial url.
 	requestURL := fmt.Sprintf("%s/services/data/%s/query?q=%s", c.instanceURL, c.apiVersion, url.QueryEscape(finalSOQL))
-	req, err := c.newRequest(ctx, "GET", requestURL, nil)
-	if err != nil {
-		return nil, err
-	}
+	var records []Record
+	var pageNo int
+	for {
+		pageNo++
+		req, err := c.newRequest(ctx, "GET", requestURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("newRequest error pageNo %d: %w", pageNo, err)
+		}
 
-	var response SOQLResponse
-	if _, err := c.do(req, &response); err != nil {
-		return nil, err
-	}
+		var response SOQLResponse
+		if _, err := c.do(req, &response); err != nil {
+			return nil, fmt.Errorf("soql do error pageNo %d: %w", pageNo, err)
+		}
+		records = append(records, response.Records...)
+		if response.Done || response.NextRecordsURL == "" {
+			break
+		}
+		requestURL, err = url.JoinPath(c.instanceURL, response.NextRecordsURL)
+		if err != nil {
+			return nil, fmt.Errorf("url construction error for page %d: (%s) %w", pageNo+1, response.NextRecordsURL, err)
+		}
 
-	return response.Records, nil
+	}
+	return records, nil
 }
 
 // BatchUpdateOpportunityRefs performs a update using the Salesforce
@@ -71,9 +91,9 @@ func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference strin
 	recordsForUpdate := make([]map[string]any, len(ids))
 	for i, id := range ids {
 		recordsForUpdate[i] = map[string]any{
-			"id":                  id,
-			"Payout_Reference__c": reference,
-			"attributes":          map[string]string{"type": "Opportunity"},
+			"id":                      id,
+			c.config.LinkingFieldName: reference,
+			"attributes":              map[string]string{"type": c.config.LinkingObject},
 		}
 	}
 
