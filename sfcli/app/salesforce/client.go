@@ -160,7 +160,7 @@ func (c *Client) newRequest(ctx context.Context, method, url string, body []byte
 }
 
 // do is a helper to execute an HTTP request and decode the JSON response.
-func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
+func (c *Client) do(req *http.Request, v any) (*http.Response, error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
@@ -179,9 +179,21 @@ func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
 	}
 
 	if v != nil {
-		if err := json.Unmarshal(body, v); err != nil {
+		// check if v is of the SOQLResponse type
+		soqlResponsePtr, ok := v.(*SOQLResponse)
+		if !ok {
+			// Return a generic response if not.
+			return resp, json.Unmarshal(body, v)
+		}
+		// unmarshal
+		unmarshaller := SOQLUnmarshaller{Mapper: c.config.FieldMappings}
+		data, err := unmarshaller.UnmarshalSOQLResponse(body)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}
+		// deference pointer and assign original
+		*soqlResponsePtr = *data
 	}
+
 	return resp, nil
 }

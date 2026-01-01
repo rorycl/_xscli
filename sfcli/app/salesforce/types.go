@@ -80,7 +80,7 @@ func (e *ErrUnmarshallFieldNotFoundError) Error() string {
 
 func (su *SOQLUnmarshaller) UnmarshalSOQLResponse(data []byte) (*SOQLResponse, error) {
 	// rawResponse is an SQLResponse but with json.RawMesage Records,
-	// which are processed below.
+	// which are processed separately.
 	var rawResponse struct {
 		TotalSize      int               `json:"totalSize"`
 		Done           bool              `json:"done"`
@@ -99,7 +99,7 @@ func (su *SOQLUnmarshaller) UnmarshalSOQLResponse(data []byte) (*SOQLResponse, e
 		Records:        make([]Record, 0, len(rawResponse.Records)),
 	}
 
-	// Process rawResponse records into finalResponse.
+	// Process rawResponse records into finalResponse.Records.
 	for _, rawRecord := range rawResponse.Records {
 		record, err := su.unmarshalAndMapRecord(rawRecord)
 		if err != nil {
