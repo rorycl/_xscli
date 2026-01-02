@@ -152,9 +152,9 @@ INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_ref
 
 -- not reconciled
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-017', 'Online Donation 2', 150.00, '2025-04-16', ''),
-('sf-opp-018', 'Online Donation 3', 50.00, '2025-04-17', ''),
-('sf-opp-019', 'Social Media Donation 2', 50.00, '2025-04-15', '');
+('sf-opp-017', 'Online Donation 2', 150.00, '2025-04-16', null),
+('sf-opp-018', 'Online Donation 3', 50.00, '2025-04-17', null),
+('sf-opp-019', 'Social Media Donation 2', 50.00, '2025-04-15', null);
 
 -- -----------------------------------------------------------------------------
 -- Bank Transaction scenario 3
@@ -199,7 +199,7 @@ INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_ref
 
 -- An unlinked opportunity 
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-odd-02', 'Unlinked Donation', 75.00, '2025-04-30', '');
+('sf-opp-odd-02', 'Unlinked Donation', 75.00, '2025-04-30', null);
 
 COMMIT;
 PRAGMA foreign_keys=ON;
