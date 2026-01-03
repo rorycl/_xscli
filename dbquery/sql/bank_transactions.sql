@@ -50,13 +50,13 @@ crms_donation_totals AS (
 
 ,reconciliation_data AS (
     SELECT
-        b.id,
-        b.reference,
-        date(substring(b.date, 1, 10)) AS date,
-        b.contact_name,
-        b.total,
-        COALESCE(bdt.total_donation_amount, 0) AS donation_total,
-        COALESCE(cdt.total_crms_amount, 0) AS crms_total
+        b.id
+        ,b.reference
+        ,date
+        ,b.contact_name
+        ,b.total
+        ,COALESCE(bdt.total_donation_amount, 0) AS donation_total
+        ,COALESCE(cdt.total_crms_amount, 0) AS crms_total
     FROM bank_transactions b
     JOIN variables c ON b.date BETWEEN c.DateFrom AND c.DateTo
     LEFT JOIN bank_transaction_donation_totals bdt ON b.id = bdt.transaction_id

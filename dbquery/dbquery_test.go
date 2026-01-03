@@ -109,3 +109,103 @@ func TestInvoicesQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestBankTransactionsQuery(t *testing.T) {
+
+	accountCodes := "^(53|55|57)"
+	ctx := context.Background()
+
+	db, err := New("testdata/test.db", accountCodes)
+	if err != nil {
+		t.Fatalf("db opening error: %v", err)
+	}
+
+	tests := []struct {
+		reconciliationStatus string
+		dateFrom             time.Time
+		dateTo               time.Time
+		searchString         string
+
+		noRecords       int
+		lastTransaction BankTransaction
+	}{
+
+		{
+			reconciliationStatus: "NotReconciled",
+			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "",
+			noRecords:            7,
+			lastTransaction: BankTransaction{
+				ID:            "bt-unrec-06",
+				Reference:     "STRIPE-PAYOUT-2025-05-04",
+				Date:          time.Date(2025, time.May, 4, 9, 0, 0, 0, time.UTC),
+				ContactName:   "Stripe",
+				Total:         332.5,
+				DonationTotal: 340,
+				CRMSTotal:     0,
+				IsReconciled:  false,
+			},
+		},
+		{
+			reconciliationStatus: "Reconciled",
+			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "",
+			noRecords:            1,
+			lastTransaction: BankTransaction{
+				ID:            "bt-001",
+				Reference:     "JG-PAYOUT-2025-04-15",
+				Date:          time.Date(2025, time.April, 15, 14, 0, 0, 0, time.UTC),
+				ContactName:   "JustGiving",
+				Total:         337.25,
+				DonationTotal: 355.0,
+				CRMSTotal:     355.0,
+				IsReconciled:  true,
+			},
+		},
+		{
+			reconciliationStatus: "All",
+			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "",
+			noRecords:            8,
+			lastTransaction: BankTransaction{
+				ID:            "bt-unrec-06",
+				Reference:     "STRIPE-PAYOUT-2025-05-04",
+				Date:          time.Date(2025, time.May, 4, 9, 0, 0, 0, time.UTC),
+				ContactName:   "Stripe",
+				Total:         332.5,
+				DonationTotal: 340,
+				CRMSTotal:     0,
+				IsReconciled:  false,
+			},
+		},
+		{
+			reconciliationStatus: "All",
+			dateFrom:             time.Date(2023, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2024, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "",
+			noRecords:            0,
+		},
+	}
+
+	for ii, tt := range tests {
+		t.Run(fmt.Sprintf("test_%d", ii), func(t *testing.T) {
+
+			transactions, err := db.GetBankTransactions(ctx, tt.reconciliationStatus, tt.dateFrom, tt.dateTo, tt.searchString)
+			if err != nil {
+				t.Fatalf("get bank transactions error: %v", err)
+			}
+			if got, want := len(transactions), tt.noRecords; got != want {
+				t.Fatalf("got %d records want %d records", got, want)
+			}
+			if len(transactions) == 0 {
+				return
+			}
+			if diff := cmp.Diff(tt.lastTransaction, transactions[len(transactions)-1]); diff != "" {
+				t.Error(diff)
+			}
+		})
+	}
+}
