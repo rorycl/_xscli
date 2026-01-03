@@ -8,7 +8,7 @@ func TestConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := c.DatabasePath, "./test.db"; got != want {
+	if got, want := c.DatabasePath, "./testdata/test.db"; got != want {
 		t.Errorf("got %q want %q", got, want)
 	}
 

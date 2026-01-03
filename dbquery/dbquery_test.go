@@ -14,7 +14,7 @@ func TestInvoicesQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("test.db", accountCodes)
+	db, err := New("testdata/test.db", accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}

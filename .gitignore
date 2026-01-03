@@ -9,9 +9,20 @@ reconciliation.db
 xero_token.json
 sf_token.json
 
+# web
+web/playground/
+
 # backups
 reconciliation.db.*
 
 # bin files
 bin
+
+# testdata
+dbquery/testdata/test.db-*
+
+# sqlite history files
+dbquery/history*
+
+
 

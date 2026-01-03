@@ -3,7 +3,7 @@
 # Please fill in these details for the database. 
 
 # Default paths used by the application.
-database_path: "./reconciliation.db"
+database_path: "./testdata/test.db"
 
 # Donation account code prefixes are the Xero account codes to consider
 # as donation accounts in queries relating to invoices and bank transactions.
