@@ -99,6 +99,7 @@ func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, date
 		"DateTo":               dateToStr,
 		"AccountCodes":         db.accountCodes,
 		"ReconciliationStatus": reconciliationStatus,
+		"TextSearch":           search,
 	}
 	if got, want := len(namedArgs), len(query.Parameters); got != want {
 		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
@@ -172,6 +173,7 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 		"DateTo":               dateToStr,
 		"AccountCodes":         db.accountCodes,
 		"ReconciliationStatus": reconciliationStatus,
+		"TextSearch":           search,
 	}
 	if got, want := len(namedArgs), len(query.Parameters); got != want {
 		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)

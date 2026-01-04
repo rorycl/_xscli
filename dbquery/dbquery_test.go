@@ -88,6 +88,40 @@ func TestInvoicesQuery(t *testing.T) {
 				IsReconciled:  false,
 			},
 		},
+		{
+			reconciliationStatus: "All",
+			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "Example", // a regex
+			noRecords:            1,
+			lastInvoice: Invoice{
+				InvoiceID:     "inv-001",
+				InvoiceNumber: "INV-2025-101",
+				Date:          time.Date(2025, time.April, 10, 10, 0, 0, 0, time.UTC),
+				ContactName:   "Example Corp Ltd",
+				Total:         500,
+				DonationTotal: 500,
+				CRMSTotal:     550,
+				IsReconciled:  false,
+			},
+		},
+		{
+			reconciliationStatus: "NotReconciled",
+			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "INV-2025.*Ex.*Corp", // a regex
+			noRecords:            1,
+			lastInvoice: Invoice{
+				InvoiceID:     "inv-001",
+				InvoiceNumber: "INV-2025-101",
+				Date:          time.Date(2025, time.April, 10, 10, 0, 0, 0, time.UTC),
+				ContactName:   "Example Corp Ltd",
+				Total:         500,
+				DonationTotal: 500,
+				CRMSTotal:     550,
+				IsReconciled:  false,
+			},
+		},
 	}
 
 	for ii, tt := range tests {
@@ -187,6 +221,23 @@ func TestBankTransactionsQuery(t *testing.T) {
 			dateTo:               time.Date(2024, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "",
 			noRecords:            0,
+		},
+		{
+			reconciliationStatus: "All",
+			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "ENTH.*04-28",
+			noRecords:            1,
+			lastTransaction: BankTransaction{
+				ID:            "bt-unrec-03",
+				Reference:     "ENTHUSE-PAYOUT-2025-04-28",
+				Date:          time.Date(2025, time.April, 28, 10, 0, 0, 0, time.UTC),
+				ContactName:   "Enthuse",
+				Total:         112,
+				DonationTotal: 115,
+				CRMSTotal:     0,
+				IsReconciled:  false,
+			},
 		},
 	}
 

@@ -15,6 +15,7 @@ WITH variables AS (
         ,'^(53|55|57).*' AS AccountCodes /* @param */
         -- All | Reconciled | NotReconciled
         ,'All' AS ReconciliationStatus   /* @param */
+        ,'ENTH.*04-28' AS TextSearch     /* @param */ 
 )
 
 ,bank_transaction_donation_totals AS (
@@ -58,12 +59,16 @@ crms_donation_totals AS (
         ,COALESCE(bdt.total_donation_amount, 0) AS donation_total
         ,COALESCE(cdt.total_crms_amount, 0) AS crms_total
     FROM bank_transactions b
-    JOIN variables c ON b.date BETWEEN c.DateFrom AND c.DateTo
+    JOIN variables v ON b.date BETWEEN v.DateFrom AND v.DateTo
     LEFT JOIN bank_transaction_donation_totals bdt ON b.id = bdt.transaction_id
     LEFT JOIN crms_donation_totals cdt ON b.reference = cdt.payout_reference_dfk
     WHERE
         b.status NOT IN ('DRAFT', 'DELETED', 'VOIDED')
         AND bdt.transaction_id IS NOT NULL 
+        AND CASE
+            WHEN v.TextSearch = '' THEN true
+            ELSE CONCAT(b.reference, ' ', b.contact_name) REGEXP v.TextSearch
+            END
 )
 SELECT 
     r.*,
