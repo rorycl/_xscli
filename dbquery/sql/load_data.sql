@@ -42,7 +42,7 @@ INSERT INTO "invoice_line_items" (id, invoice_id, description, line_amount, acco
 ('inv-li-001', 'inv-001', 'Donation for Q1 2025', 500.00, '5501');
 
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-001', 'Example Corp Q1 Donation', 500.00, '2025-04-08', 'INV-2025-101');
+('sf-opp-001', 'Example Corp Q1 Donation', 500.00, datetime('2025-04-08'), 'INV-2025-101');
 
 -- -----------------------------------------------------------------------------
 -- Invoice scenario 2
@@ -58,7 +58,7 @@ INSERT INTO "invoice_line_items" (id, invoice_id, description, line_amount, acco
 ('inv-li-002b', 'inv-002', 'Stripe processing fee', -3.50, '429');
 
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-002', 'Generous Individual Pledge', 200.00, '2025-04-11', 'INV-2025-102');
+('sf-opp-002', 'Generous Individual Pledge', 200.00, datetime('2025-04-11'), 'INV-2025-102');
 
 -- -----------------------------------------------------------------------------
 -- Invoice scenario 3
@@ -121,18 +121,18 @@ INSERT INTO "bank_transaction_line_items" (id, transaction_id, description, line
 ('bt-li-001c', 'bt-001', 'JustGiving Platform Fee', -17.75, '429');
 
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-003', 'Anonymous Donor', 20.00, '2025-04-13', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-004', 'Anonymous Donor', 20.00, '2025-04-13', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-005', 'Jane Smith', 100.00, '2025-04-14', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-006', 'Anonymous Donor', 20.00, '2025-04-14', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-007', 'Anonymous Donor', 20.00, '2025-04-14', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-008', 'Anonymous Donor', 20.00, '2025-04-14', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-009', 'Anonymous Donor', 20.00, '2025-04-14', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-010', 'Anonymous Donor', 20.00, '2025-04-14', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-011', 'Anonymous Donor', 20.00, '2025-04-14', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-012', 'Anonymous Donor', 20.00, '2025-04-14', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-013', 'John Doe', 55.00, '2025-04-15', 'JG-PAYOUT-2025-04-15'),
-('sf-opp-014', 'Anonymous Donor', 20.00, '2025-04-15', 'JG-PAYOUT-2025-04-15');
+('sf-opp-003', 'Anonymous Donor', 20.00, datetime('2025-04-13'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-004', 'Anonymous Donor', 20.00, datetime('2025-04-13'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-005', 'Jane Smith', 100.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-006', 'Anonymous Donor', 20.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-007', 'Anonymous Donor', 20.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-008', 'Anonymous Donor', 20.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-009', 'Anonymous Donor', 20.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-010', 'Anonymous Donor', 20.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-011', 'Anonymous Donor', 20.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-012', 'Anonymous Donor', 20.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-013', 'John Doe', 55.00, datetime('2025-04-15'), 'JG-PAYOUT-2025-04-15'),
+('sf-opp-014', 'Anonymous Donor', 20.00, datetime('2025-04-15'), 'JG-PAYOUT-2025-04-15');
 
 -- -----------------------------------------------------------------------------
 -- Bank Transaction scenario 2
@@ -147,14 +147,14 @@ INSERT INTO "bank_transaction_line_items" (id, transaction_id, description, line
 
 -- reconciled
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-015', 'Online Donation', 100.00, '2025-04-18', 'STRIPE-PAYOUT-2025-04-20'),
-('sf-opp-016', 'Social Media Donation', 150.00, '2025-04-19', 'STRIPE-PAYOUT-2025-04-20');
+('sf-opp-015', 'Online Donation', 100.00, datetime('2025-04-18'), 'STRIPE-PAYOUT-2025-04-20'),
+('sf-opp-016', 'Social Media Donation', 150.00, datetime('2025-04-19'), 'STRIPE-PAYOUT-2025-04-20');
 
 -- not reconciled
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-017', 'Online Donation 2', 150.00, '2025-04-16', null),
-('sf-opp-018', 'Online Donation 3', 50.00, '2025-04-17', null),
-('sf-opp-019', 'Social Media Donation 2', 50.00, '2025-04-15', null);
+('sf-opp-017', 'Online Donation 2', 150.00, datetime('2025-04-16'), null),
+('sf-opp-018', 'Online Donation 3', 50.00, datetime('2025-04-17'), null),
+('sf-opp-019', 'Social Media Donation 2', 50.00, datetime('2025-04-15'), null);
 
 -- -----------------------------------------------------------------------------
 -- Bank Transaction scenario 3
@@ -187,7 +187,7 @@ INSERT INTO "bank_transaction_line_items" (id, transaction_id, description, line
 ('bt-li-prev-fy-01a', 'bt-prev-fy-01', 'Donation Payout', 200.00, '5501'),
 ('bt-li-prev-fy-01b', 'bt-prev-fy-01', 'Fee', -10.00, '429');
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-prev-fy-01', 'Old Donation', 200.00, '2025-02-26', 'JG-PAYOUT-2025-02-28');
+('sf-opp-prev-fy-01', 'Old Donation', 200.00, datetime('2025-02-26'), 'JG-PAYOUT-2025-02-28');
 
 -- -----------------------------------------------------------------------------
 -- Salesforce scenario 1
@@ -195,11 +195,11 @@ INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_ref
 -- -----------------------------------------------------------------------------
 -- An opportunity with a "bad" date (date after the payout date)
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-odd-01', 'Data Entry Error Donation', 50.00, '2025-06-10', 'INV-2025-101');
+('sf-opp-odd-01', 'Data Entry Error Donation', 50.00, datetime('2025-06-10'), 'INV-2025-101');
 
 -- An unlinked opportunity 
 INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
-('sf-opp-odd-02', 'Unlinked Donation', 75.00, '2025-04-30', null);
+('sf-opp-odd-02', 'Unlinked Donation', 75.00, datetime('2025-04-30'), null);
 
 COMMIT;
 PRAGMA foreign_keys=ON;
