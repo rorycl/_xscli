@@ -260,3 +260,148 @@ func TestBankTransactionsQuery(t *testing.T) {
 		})
 	}
 }
+
+func ptrTime(ti time.Time) *time.Time {
+	return &ti
+}
+
+func ptrStr(s string) *string {
+	return &s
+}
+
+func TestDonationsQuery(t *testing.T) {
+
+	accountCodes := "^(53|55|57)"
+	ctx := context.Background()
+
+	db, err := New("testdata/test.db", accountCodes)
+	if err != nil {
+		t.Fatalf("db opening error: %v", err)
+	}
+
+	tests := []struct {
+		dateFrom        time.Time
+		dateTo          time.Time
+		linkageStatus   string
+		payoutReference string
+		searchString    string
+
+		noRecords  int
+		lastRecord Donation
+	}{
+		{
+			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			linkageStatus:   "All",
+			payoutReference: "",
+			searchString:    "",
+			noRecords:       21,
+			lastRecord: Donation{
+				ID:              "sf-opp-odd-02",
+				Name:            "Unlinked Donation",
+				Amount:          75,
+				CloseDate:       ptrTime(time.Date(2025, 4, 30, 0, 0, 0, 0, time.UTC)),
+				PayoutReference: nil,
+				CreatedDate:     nil,
+				CreatedName:     nil,
+				ModifiedDate:    nil,
+				ModifiedName:    nil,
+			},
+		},
+		{
+			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			linkageStatus:   "Linked",
+			payoutReference: "",
+			searchString:    "",
+			noRecords:       17,
+			lastRecord: Donation{
+				ID:              "sf-opp-odd-01",
+				Name:            "Data Entry Error Donation",
+				Amount:          50,
+				CloseDate:       ptrTime(time.Date(2025, 6, 10, 0, 0, 0, 0, time.UTC)),
+				PayoutReference: ptrStr("INV-2025-101"),
+				CreatedDate:     nil,
+				CreatedName:     nil,
+				ModifiedDate:    nil,
+				ModifiedName:    nil,
+			},
+		},
+		{
+			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			linkageStatus:   "Linked",
+			payoutReference: "INV-2025-101",
+			searchString:    "Data Entry",
+			noRecords:       1,
+			lastRecord: Donation{
+				ID:              "sf-opp-odd-01",
+				Name:            "Data Entry Error Donation",
+				Amount:          50,
+				CloseDate:       ptrTime(time.Date(2025, 6, 10, 0, 0, 0, 0, time.UTC)),
+				PayoutReference: ptrStr("INV-2025-101"),
+				CreatedDate:     nil,
+				CreatedName:     nil,
+				ModifiedDate:    nil,
+				ModifiedName:    nil,
+			},
+		},
+		{
+			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			linkageStatus:   "NotLinked",
+			payoutReference: "",
+			searchString:    "",
+			noRecords:       4,
+			lastRecord: Donation{
+				ID:              "sf-opp-odd-02",
+				Name:            "Unlinked Donation",
+				Amount:          75,
+				CloseDate:       ptrTime(time.Date(2025, 4, 30, 0, 0, 0, 0, time.UTC)),
+				PayoutReference: nil,
+				CreatedDate:     nil,
+				CreatedName:     nil,
+				ModifiedDate:    nil,
+				ModifiedName:    nil,
+			},
+		},
+		{
+			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			linkageStatus:   "NotLinked",
+			payoutReference: "",
+			searchString:    "Unlinked Donation",
+			noRecords:       1,
+			lastRecord: Donation{
+				ID:              "sf-opp-odd-02",
+				Name:            "Unlinked Donation",
+				Amount:          75,
+				CloseDate:       ptrTime(time.Date(2025, 4, 30, 0, 0, 0, 0, time.UTC)),
+				PayoutReference: nil,
+				CreatedDate:     nil,
+				CreatedName:     nil,
+				ModifiedDate:    nil,
+				ModifiedName:    nil,
+			},
+		},
+	}
+
+	for ii, tt := range tests {
+		t.Run(fmt.Sprintf("test_%d", ii), func(t *testing.T) {
+
+			donations, err := db.GetDonations(ctx, tt.dateFrom, tt.dateTo, tt.linkageStatus, tt.payoutReference, tt.searchString)
+			if err != nil {
+				t.Fatalf("get donations error: %v", err)
+			}
+			if got, want := len(donations), tt.noRecords; got != want {
+				t.Fatalf("got %d records want %d records", got, want)
+			}
+			if len(donations) == 0 {
+				return
+			}
+			if diff := cmp.Diff(tt.lastRecord, donations[len(donations)-1]); diff != "" {
+				t.Error(diff)
+			}
+		})
+	}
+}

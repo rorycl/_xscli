@@ -24,7 +24,7 @@ SELECT
     s.id  
     ,s.name 
     ,s.amount
-    ,date(s.close_date) AS close_date /* column is defined as text */
+    ,s.close_date
     ,s.payout_reference_dfk
     ,s.created_date
     ,s.created_by_name

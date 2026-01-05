@@ -114,7 +114,8 @@ func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, date
 	return invoices, nil
 }
 
-// BankTransaction is the concrete type of each row returned by GetInvoices.
+// BankTransaction is the concrete type of each row returned by
+// GetBankTransactions.
 type BankTransaction struct {
 	ID            string    `db:"id"`
 	Reference     string    `db:"reference"`
@@ -186,4 +187,76 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 		return nil, fmt.Errorf("bank transactions select error: %v", err)
 	}
 	return transactions, nil
+}
+
+// Donation is the concrete type of each row returned by
+// GetDonations
+type Donation struct {
+	ID              string     `db:"id"`
+	Name            string     `db:"name"`
+	Amount          float64    `db:"amount"`
+	CloseDate       *time.Time `db:"close_date"`
+	PayoutReference *string    `db:"payout_reference_dfk"`
+	CreatedDate     *time.Time `db:"created_date"`
+	CreatedName     *string    `db:"created_by_name"`
+	ModifiedDate    *time.Time `db:"last_modified_date"`
+	ModifiedName    *string    `db:"last_modified_by_name"`
+}
+
+// GetDonations retrieves donations from the database with the specified
+// filters.
+func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, linkageStatus, payoutReference, search string) ([]Donation, error) {
+
+	b, err := os.ReadFile("sql/donations.sql")
+	if err != nil {
+		return nil, fmt.Errorf("donations query file load error: %w", err)
+	}
+
+	query, err := Parameterize(b)
+	if err != nil {
+		return nil, fmt.Errorf("donations query template error: %w", err)
+	}
+
+	// Determine reconciliation status.
+	switch linkageStatus {
+	case "All", "Linked", "NotLinked":
+	default:
+		return nil, fmt.Errorf(
+			"linkage status must be one of All, Linked or NotLinked, got %q",
+			linkageStatus,
+		)
+	}
+
+	// Date formatting.
+	var (
+		dateFromStr = dateFrom.Format("2006-01-02")
+		dateToStr   = dateTo.Format("2006-01-02")
+	)
+
+	// Parse the query and map the named parameters.
+	stmt, err := db.PrepareNamedContext(ctx, string(query.Body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare donations statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// Args uses sqlx's named query capability.
+	namedArgs := map[string]any{
+		"DateFrom":        dateFromStr,
+		"DateTo":          dateToStr,
+		"LinkageStatus":   linkageStatus,
+		"PayoutReference": payoutReference,
+		"TextSearch":      search,
+	}
+	if got, want := len(namedArgs), len(query.Parameters); got != want {
+		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
+	}
+
+	// Use sqlx to scan results into the provided slice.
+	var donations []Donation
+	err = stmt.SelectContext(ctx, &donations, namedArgs)
+	if err != nil {
+		return nil, fmt.Errorf("donations select error: %v", err)
+	}
+	return donations, nil
 }
