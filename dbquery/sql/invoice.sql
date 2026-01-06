@@ -14,11 +14,11 @@ SELECT
         1
      ELSE
         0
-     END AS reconciled
+     END AS is_reconciled
 FROM (
     WITH variables AS (
         SELECT
-             'INV-2025-101' AS InvoiceNumber /* @param */
+             'INV-2025-102' AS InvoiceNumber /* @param */
             ,'^(53|55|57).*' AS AccountCodes /* @param */
     )
     
@@ -37,7 +37,7 @@ FROM (
     SELECT
         i.id
         ,i.invoice_number
-        ,date(substring(i.date, 1, 10)) AS date
+        ,i.date
         ,i.type
         ,i.status
         ,i.reference
@@ -47,6 +47,7 @@ FROM (
             FILTER (WHERE li.account_code REGEXP variables.AccountCodes)
             OVER (PARTITION BY i.id) AS donation_total
         ,rds.donation_sum AS crms_total
+        ,li.account_code AS li_account_code
         ,a.name AS account_name
         ,li.description AS li_description
         ,li.tax_amount AS li_tax_amount
@@ -66,9 +67,5 @@ FROM (
         LEFT OUTER JOIN reconciled_donations_summed rds ON (rds.payout_reference_dfk = i.invoice_number)
     WHERE
         variables.InvoiceNumber = i.invoice_number
-        /*
-        AND
-        i.status NOT IN ('DRAFT', 'DELETED', 'VOIDED')
-        */
 ) x
 ;
