@@ -232,8 +232,9 @@ func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, link
 	return donations, nil
 }
 
-// IWLInvoice is the invoice component of an InvoiceWithLineItems.
-type IWLInvoice struct {
+// WRInvoice is the invoice component of a wide rows invoice with line
+// items query.
+type WRInvoice struct {
 	ID            string    `db:"id"`
 	InvoiceNumber string    `db:"invoice_number"`
 	Date          time.Time `db:"date"`
@@ -247,32 +248,34 @@ type IWLInvoice struct {
 	IsReconciled  bool      `db:"is_reconciled"`
 }
 
-// IWLLineItem is the line item component of an InvoiceWithLineItems.
-type IWLLineItem struct {
-	LiAccountCode    *string  `db:"li_account_code"`
-	LiAccountName    *string  `db:"account_name"`
-	LiDescription    *string  `db:"li_description"`
-	LiTaxAmount      *float64 `db:"li_tax_amount"`
-	LiLineAmount     *float64 `db:"li_line_amount"`
-	LiDonationAmount *float64 `db:"li_donation_amount"`
+// WRLineItem is the line item component of a wide rows invoice with
+// line items query. All values could be null.
+type WRLineItem struct {
+	AccountCode    *string  `db:"li_account_code"`
+	AccountName    *string  `db:"account_name"`
+	Description    *string  `db:"li_description"`
+	TaxAmount      *float64 `db:"li_tax_amount"`
+	LineAmount     *float64 `db:"li_line_amount"`
+	DonationAmount *float64 `db:"li_donation_amount"`
 }
 
-// GetInvoiceWLI retrieves a single invoice from the database with it's
-// constituent line items. This query returns rows for each line item.
-func (db *DB) GetInvoiceWLI(ctx context.Context, invoiceID string) (IWLInvoice, []IWLLineItem, error) {
+// GetInvoiceWR (a wide rows query) retrieves a single invoice from
+// the database with it's constituent line items. This query returns
+// rows for each line item.
+func (db *DB) GetInvoiceWR(ctx context.Context, invoiceID string) (WRInvoice, []WRLineItem, error) {
 
 	// invoiceWithLineItems is the concrete type of each row returned by
-	// GetInvoiceWLI.
+	// GetInvoiceWR.
 	type invoiceWithLineItems struct {
-		IWLInvoice
-		IWLLineItem
+		WRInvoice
+		WRLineItem
 	}
 
 	// invoicesWithLineItems is a slice of InvoiceWithLineItems.
 	type invoicesWLI []invoiceWithLineItems
 
 	// Initialise the invoice return type.
-	var invoice IWLInvoice
+	var invoice WRInvoice
 
 	// Parameterize the sql query file by replacing the example
 	// variables.
@@ -310,10 +313,87 @@ func (db *DB) GetInvoiceWLI(ctx context.Context, invoiceID string) (IWLInvoice, 
 	}
 
 	// Return invoice and child line items.
-	invoice = iwli[0].IWLInvoice
-	lineItems := make([]IWLLineItem, len(iwli))
+	invoice = iwli[0].WRInvoice
+	lineItems := make([]WRLineItem, len(iwli))
 	for i, li := range iwli {
-		lineItems[i] = li.IWLLineItem
+		lineItems[i] = li.WRLineItem
 	}
 	return invoice, lineItems, nil
+}
+
+// WRTransaction is the bank transaction component of a wide rows bank
+// transaction with line items query.
+type WRTransaction struct {
+	ID            string    `db:"id"`
+	Reference     *string   `db:"reference"`
+	Date          time.Time `db:"date"`
+	Type          *string   `db:"type"`
+	Status        string    `db:"status"`
+	ContactName   string    `db:"contact_name"`
+	Total         float64   `db:"total"`
+	DonationTotal float64   `db:"donation_total"`
+	CRMSTotal     float64   `db:"crms_total"`
+	IsReconciled  bool      `db:"is_reconciled"`
+}
+
+// GetTransactionWR (a wide rows query) retrieves a single invoice from
+// the database with it's constituent line items. This query returns
+// rows for each line item.
+func (db *DB) GetTransactionWR(ctx context.Context, transactionID string) (WRTransaction, []WRLineItem, error) {
+
+	// transactionWithLineItems is the concrete type of each row returned by
+	// GetTransactionWR.
+	type transactionWithLineItems struct {
+		WRTransaction
+		WRLineItem
+	}
+
+	// transactionsWithLineItems is a slice of transactionWithLineItems.
+	type transactionsWLI []transactionWithLineItems
+
+	// Initialise the transaction return type.
+	var transaction WRTransaction
+
+	// Parameterize the sql query file by replacing the example
+	// variables.
+	query, err := ParameterizeFile("sql/bank_transaction.sql")
+	if err != nil {
+		return transaction, nil, fmt.Errorf("transaction query file error: %w", err)
+	}
+
+	// Parse the query and map the named parameters.
+	stmt, err := db.PrepareNamedContext(ctx, string(query.Body))
+	if err != nil {
+		return transaction, nil, fmt.Errorf("failed to prepare transaction statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// Args uses sqlx's named query capability.
+	namedArgs := map[string]any{
+		"AccountCodes":      db.accountCodes,
+		"BankTransactionID": transactionID,
+	}
+	if got, want := len(namedArgs), len(query.Parameters); got != want {
+		return transaction, nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
+	}
+
+	// Use sqlx to scan results into the provided slice.
+	var twli transactionsWLI
+	err = stmt.SelectContext(ctx, &twli, namedArgs)
+	if err != nil {
+		return transaction, nil, fmt.Errorf("transaction select error: %v", err)
+	}
+
+	// Return early if no errors were returned.
+	if len(twli) == 0 {
+		return transaction, nil, sql.ErrNoRows
+	}
+
+	// Return transaction and child line items.
+	transaction = twli[0].WRTransaction
+	lineItems := make([]WRLineItem, len(twli))
+	for i, li := range twli {
+		lineItems[i] = li.WRLineItem
+	}
+	return transaction, lineItems, nil
 }

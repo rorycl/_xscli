@@ -8,6 +8,11 @@
  Note do _not_ use colons in sql or comments as it breaks the sqlx parser.
 */
 
+WITH variables AS (
+    SELECT
+         'inv-unrec-04'  AS InvoiceID    /* @param */
+        ,'^(53|55|57).*' AS AccountCodes /* @param */
+)
 SELECT
     *
     ,CASE WHEN donation_total = crms_total THEN
@@ -16,34 +21,6 @@ SELECT
         0
      END AS is_reconciled
 FROM (
-    WITH variables AS (
-        SELECT
-             'inv-002' AS InvoiceID /* @param */
-            ,'^(53|55|57).*' AS AccountCodes /* @param */
-    )
-
-    ,variables_extended AS (
-        SELECT
-             v.InvoiceID AS InvoiceID 
-            ,v.AccountCodes AS AccountCodes 
-            ,i.invoice_number AS InvoiceNumber
-        FROM
-            invoices i
-            JOIN variables v ON (v.InvoiceID = i.id)
-    )
-    
-    ,reconciled_donations_summed AS (
-        SELECT
-            payout_reference_dfk
-            ,sum(amount) AS donation_sum
-        FROM
-            salesforce_opportunities
-            ,variables_extended ve
-        WHERE
-            payout_reference_dfk = ve.InvoiceNumber
-        GROUP BY
-            payout_reference_dfk
-    )
     SELECT
         i.id
         ,i.invoice_number
@@ -53,10 +30,15 @@ FROM (
         ,i.reference
         ,i.contact_name
         ,i.total
-        ,sum(li.line_amount) 
+        ,COALESCE(
+            SUM(li.line_amount) 
             FILTER (WHERE li.account_code REGEXP variables.AccountCodes)
-            OVER (PARTITION BY i.id) AS donation_total
-        ,rds.donation_sum AS crms_total
+            OVER (PARTITION BY i.id)
+         , 0) AS donation_total
+        ,COALESCE(rds.donation_sum, 0) AS crms_total
+        -- line items
+        -- Note that some line items only have a description, which
+        -- works like a "note" in invoices and bank transactions.
         ,li.account_code AS li_account_code
         ,a.name AS account_name
         ,li.description AS li_description
@@ -72,9 +54,19 @@ FROM (
     FROM
         invoices i
         ,variables
-        JOIN invoice_line_items li ON (li.invoice_id = i.id)
+        LEFT OUTER JOIN invoice_line_items li ON (li.invoice_id = i.id)
         LEFT OUTER JOIN accounts a ON (li.account_code = a.code)
-        LEFT OUTER JOIN reconciled_donations_summed rds ON (rds.payout_reference_dfk = i.invoice_number)
+        -- reconciled_donations_summed rds is the total of
+        -- salesforce_opportunites for this invoice.
+        LEFT OUTER JOIN (
+            SELECT
+                payout_reference_dfk
+                ,sum(amount) AS donation_sum
+            FROM
+                salesforce_opportunities
+            GROUP BY
+                payout_reference_dfk
+        ) rds ON (rds.payout_reference_dfk = i.invoice_number)
     WHERE
         variables.InvoiceID = i.id
 ) x
