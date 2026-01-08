@@ -10,10 +10,22 @@ import (
 	_ "modernc.org/sqlite"    // pure go sqlite driver
 )
 
+type parameterizedStmt struct {
+	namedStatement *sqlx.NamedStmt
+	args           []string
+}
+
 // DB provides a wrapper around the sql.DB connection for application-specific database operations.
 type DB struct {
 	*sqlx.DB
 	accountCodes string
+
+	// Prepared statements.
+	getInvoicesStmt          *parameterizedStmt
+	getBankTransactionsStmt  *parameterizedStmt
+	getDonationsStmt         *parameterizedStmt
+	getInvoiceWRStmt         *parameterizedStmt
+	getBankTransactionWRStmt *parameterizedStmt
 }
 
 // New creates a new connection to an SQLite database at the given path.
@@ -32,9 +44,51 @@ func New(path string, accountCodes string) (*DB, error) {
 	}
 
 	// Wrap the standard library *sql.DB with sqlx.
-	db := sqlx.NewDb(dbDB, "sqlite")
+	db := &DB{
+		DB:           sqlx.NewDb(dbDB, "sqlite"),
+		accountCodes: accountCodes,
+	}
 
-	return &DB{db, accountCodes}, nil
+	// Prepare all the statements.
+	db.getInvoicesStmt, err = db.prepNamedStatement("sql/invoices.sql")
+	if err != nil {
+		return nil, fmt.Errorf("invoices statement error: %w", err)
+	}
+	db.getBankTransactionsStmt, err = db.prepNamedStatement("sql/bank_transactions.sql")
+	if err != nil {
+		return nil, fmt.Errorf("bank_transactions statement error: %w", err)
+	}
+	db.getDonationsStmt, err = db.prepNamedStatement("sql/donations.sql")
+	if err != nil {
+		return nil, fmt.Errorf("donations statement error: %w", err)
+	}
+	db.getInvoiceWRStmt, err = db.prepNamedStatement("sql/invoice.sql")
+	if err != nil {
+		return nil, fmt.Errorf("invoice statement error: %w", err)
+	}
+	db.getBankTransactionWRStmt, err = db.prepNamedStatement("sql/bank_transaction.sql")
+	if err != nil {
+		return nil, fmt.Errorf("bank_transaction statement error: %w", err)
+	}
+
+	return db, nil
+}
+
+// prepareNamedStatment prepares the SQL queries.
+func (db *DB) prepNamedStatement(filePath string) (*parameterizedStmt, error) {
+	query, err := ParameterizeFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("could not parameterize %q: %w", filePath, err)
+	}
+
+	pQuery, err := db.PrepareNamed(string(query.Body))
+	if err != nil {
+		return nil, fmt.Errorf("could not prepare statement %q: %w", filePath, err)
+	}
+	return &parameterizedStmt{
+		pQuery,
+		query.Parameters,
+	}, nil
 }
 
 // Invoice is the concrete type of each row returned by GetInvoices.
@@ -58,12 +112,9 @@ type Invoice struct {
 // values. It isn't necessary to run this query in a transaction.
 func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, dateFrom, dateTo time.Time, search string, limit, offset int) ([]Invoice, error) {
 
-	// Parameterize the sql query file by replacing the example
-	// variables.
-	query, err := ParameterizeFile("sql/invoices.sql")
-	if err != nil {
-		return nil, fmt.Errorf("invoices query file error: %w", err)
-	}
+	// Set named statement and parameter list.
+	stmt := db.getInvoicesStmt.namedStatement
+	params := db.getInvoicesStmt.args
 
 	// Determine reconciliation status.
 	switch reconciliationStatus {
@@ -75,14 +126,6 @@ func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, date
 		)
 	}
 
-	// Parse the query and map the named parameters.
-	stmt, err := db.PrepareNamedContext(ctx, string(query.Body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare invoices statement: %w", err)
-	}
-	defer stmt.Close()
-	// _ = os.WriteFile("/tmp/parsed_query.sql", []byte(stmt.QueryString+"\n"+strings.Join(stmt.Params, " | ")), 0644) // temporary
-
 	// Args uses sqlx's named query capability.
 	namedArgs := map[string]any{
 		"DateFrom":             dateFrom.Format("2006-01-02"),
@@ -93,13 +136,14 @@ func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, date
 		"HereLimit":            limit,
 		"HereOffset":           offset,
 	}
-	if got, want := len(namedArgs), len(query.Parameters); got != want {
+	if got, want := len(namedArgs), len(params); got != want {
+		fmt.Println(params)
 		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
 	}
 
 	// Use sqlx to scan results into the provided slice.
 	var invoices []Invoice
-	err = stmt.SelectContext(ctx, &invoices, namedArgs)
+	err := stmt.SelectContext(ctx, &invoices, namedArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invoices select error: %v", err)
 	}
@@ -133,12 +177,9 @@ type BankTransaction struct {
 // and donation values. It isn't necessary to run this query in a transaction.
 func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus string, dateFrom, dateTo time.Time, search string, limit, offset int) ([]BankTransaction, error) {
 
-	// Parameterize the sql query file by replacing the example
-	// variables.
-	query, err := ParameterizeFile("sql/bank_transactions.sql")
-	if err != nil {
-		return nil, fmt.Errorf("bank transactions query file error: %w", err)
-	}
+	// Set named statement and parameter list.
+	stmt := db.getBankTransactionsStmt.namedStatement
+	params := db.getBankTransactionsStmt.args
 
 	// Determine reconciliation status.
 	switch reconciliationStatus {
@@ -150,13 +191,6 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 		)
 	}
 
-	// Parse the query and map the named parameters.
-	stmt, err := db.PrepareNamedContext(ctx, string(query.Body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare invoices statement: %w", err)
-	}
-	defer stmt.Close()
-
 	// Args uses sqlx's named query capability.
 	namedArgs := map[string]any{
 		"DateFrom":             dateFrom.Format("2006-01-02"),
@@ -167,13 +201,13 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 		"HereLimit":            limit,
 		"HereOffset":           offset,
 	}
-	if got, want := len(namedArgs), len(query.Parameters); got != want {
+	if got, want := len(namedArgs), len(params); got != want {
 		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
 	}
 
 	// Use sqlx to scan results into the provided slice.
 	var transactions []BankTransaction
-	err = stmt.SelectContext(ctx, &transactions, namedArgs)
+	err := stmt.SelectContext(ctx, &transactions, namedArgs)
 	if err != nil {
 		return nil, fmt.Errorf("bank transactions select error: %v", err)
 	}
@@ -205,12 +239,9 @@ type Donation struct {
 // filters.
 func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, linkageStatus, payoutReference, search string, limit, offset int) ([]Donation, error) {
 
-	// Parameterize the sql query file by replacing the example
-	// variables.
-	query, err := ParameterizeFile("sql/donations.sql")
-	if err != nil {
-		return nil, fmt.Errorf("donations query file error: %w", err)
-	}
+	// Set named statement and parameter list.
+	stmt := db.getDonationsStmt.namedStatement
+	params := db.getDonationsStmt.args
 
 	// Determine reconciliation status.
 	switch linkageStatus {
@@ -222,13 +253,6 @@ func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, link
 		)
 	}
 
-	// Parse the query and map the named parameters.
-	stmt, err := db.PrepareNamedContext(ctx, string(query.Body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare donations statement: %w", err)
-	}
-	defer stmt.Close()
-
 	// Args uses sqlx's named query capability.
 	namedArgs := map[string]any{
 		"DateFrom":        dateFrom.Format("2006-01-02"),
@@ -239,14 +263,13 @@ func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, link
 		"HereLimit":       limit,
 		"HereOffset":      offset,
 	}
-	if got, want := len(namedArgs), len(query.Parameters); got != want {
+	if got, want := len(namedArgs), len(params); got != want {
 		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
 	}
-	// _ = os.WriteFile("/tmp/parsed_query.sql", []byte(stmt.QueryString+"\n"+strings.Join(stmt.Params, " | ")+fmt.Sprintf("\n%#v\n", namedArgs)), 0644) // temporary
 
 	// Use sqlx to scan results into the provided slice.
 	var donations []Donation
-	err = stmt.SelectContext(ctx, &donations, namedArgs)
+	err := stmt.SelectContext(ctx, &donations, namedArgs)
 	if err != nil {
 		return nil, fmt.Errorf("donations select error: %v", err)
 	}
@@ -289,6 +312,10 @@ type WRLineItem struct {
 // rows for each line item.
 func (db *DB) GetInvoiceWR(ctx context.Context, invoiceID string) (WRInvoice, []WRLineItem, error) {
 
+	// Set named statement and parameter list.
+	stmt := db.getInvoiceWRStmt.namedStatement
+	params := db.getInvoiceWRStmt.args
+
 	// invoiceWithLineItems is the concrete type of each row returned by
 	// GetInvoiceWR.
 	type invoiceWithLineItems struct {
@@ -302,32 +329,18 @@ func (db *DB) GetInvoiceWR(ctx context.Context, invoiceID string) (WRInvoice, []
 	// Initialise the invoice return type.
 	var invoice WRInvoice
 
-	// Parameterize the sql query file by replacing the example
-	// variables.
-	query, err := ParameterizeFile("sql/invoice.sql")
-	if err != nil {
-		return invoice, nil, fmt.Errorf("invoice query file error: %w", err)
-	}
-
-	// Parse the query and map the named parameters.
-	stmt, err := db.PrepareNamedContext(ctx, string(query.Body))
-	if err != nil {
-		return invoice, nil, fmt.Errorf("failed to prepare invoice statement: %w", err)
-	}
-	defer stmt.Close()
-
 	// Args uses sqlx's named query capability.
 	namedArgs := map[string]any{
 		"AccountCodes": db.accountCodes,
 		"InvoiceID":    invoiceID,
 	}
-	if got, want := len(namedArgs), len(query.Parameters); got != want {
+	if got, want := len(namedArgs), len(params); got != want {
 		return invoice, nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
 	}
 
 	// Use sqlx to scan results into the provided slice.
 	var iwli invoicesWLI
-	err = stmt.SelectContext(ctx, &iwli, namedArgs)
+	err := stmt.SelectContext(ctx, &iwli, namedArgs)
 	if err != nil {
 		return invoice, nil, fmt.Errorf("invoice select error: %v", err)
 	}
@@ -366,6 +379,10 @@ type WRTransaction struct {
 // rows for each line item.
 func (db *DB) GetTransactionWR(ctx context.Context, transactionID string) (WRTransaction, []WRLineItem, error) {
 
+	// Set named statement and parameter list.
+	stmt := db.getBankTransactionWRStmt.namedStatement
+	params := db.getBankTransactionWRStmt.args
+
 	// transactionWithLineItems is the concrete type of each row returned by
 	// GetTransactionWR.
 	type transactionWithLineItems struct {
@@ -379,32 +396,18 @@ func (db *DB) GetTransactionWR(ctx context.Context, transactionID string) (WRTra
 	// Initialise the transaction return type.
 	var transaction WRTransaction
 
-	// Parameterize the sql query file by replacing the example
-	// variables.
-	query, err := ParameterizeFile("sql/bank_transaction.sql")
-	if err != nil {
-		return transaction, nil, fmt.Errorf("transaction query file error: %w", err)
-	}
-
-	// Parse the query and map the named parameters.
-	stmt, err := db.PrepareNamedContext(ctx, string(query.Body))
-	if err != nil {
-		return transaction, nil, fmt.Errorf("failed to prepare transaction statement: %w", err)
-	}
-	defer stmt.Close()
-
 	// Args uses sqlx's named query capability.
 	namedArgs := map[string]any{
 		"AccountCodes":      db.accountCodes,
 		"BankTransactionID": transactionID,
 	}
-	if got, want := len(namedArgs), len(query.Parameters); got != want {
+	if got, want := len(namedArgs), len(params); got != want {
 		return transaction, nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
 	}
 
 	// Use sqlx to scan results into the provided slice.
 	var twli transactionsWLI
-	err = stmt.SelectContext(ctx, &twli, namedArgs)
+	err := stmt.SelectContext(ctx, &twli, namedArgs)
 	if err != nil {
 		return transaction, nil, fmt.Errorf("transaction select error: %v", err)
 	}
