@@ -47,6 +47,7 @@ type Invoice struct {
 	DonationTotal float64   `db:"donation_total"`
 	CRMSTotal     float64   `db:"crms_total"`
 	IsReconciled  bool      `db:"is_reconciled"`
+	RowCount      int       `db:"row_count"`
 	// UpdatedDateUTC string     `db:"UpdatedDateUTC"`
 	// Status         string     `db:"Status"`
 	// Reference      string     `db:"Reference,omitempty"`
@@ -55,7 +56,7 @@ type Invoice struct {
 
 // GetInvoices gets invoices with summed up line item and donation
 // values. It isn't necessary to run this query in a transaction.
-func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, dateFrom, dateTo time.Time, search string) ([]Invoice, error) {
+func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, dateFrom, dateTo time.Time, search string, limit, offset int) ([]Invoice, error) {
 
 	// Parameterize the sql query file by replacing the example
 	// variables.
@@ -89,6 +90,8 @@ func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, date
 		"AccountCodes":         db.accountCodes,
 		"ReconciliationStatus": reconciliationStatus,
 		"TextSearch":           search,
+		"HereLimit":            limit,
+		"HereOffset":           offset,
 	}
 	if got, want := len(namedArgs), len(query.Parameters); got != want {
 		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
@@ -99,6 +102,11 @@ func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, date
 	err = stmt.SelectContext(ctx, &invoices, namedArgs)
 	if err != nil {
 		return nil, fmt.Errorf("invoices select error: %v", err)
+	}
+
+	// Return early if no rows were returned.
+	if len(invoices) == 0 {
+		return nil, sql.ErrNoRows
 	}
 	return invoices, nil
 }
@@ -114,6 +122,7 @@ type BankTransaction struct {
 	DonationTotal float64   `db:"donation_total"`
 	CRMSTotal     float64   `db:"crms_total"`
 	IsReconciled  bool      `db:"is_reconciled"`
+	RowCount      int       `db:"row_count"`
 	// UpdatedDateUTC string     `db:"UpdatedDateUTC"`
 	// Status         string     `db:"Status"`
 	// Reference      string     `db:"Reference,omitempty"`
@@ -122,7 +131,7 @@ type BankTransaction struct {
 
 // GetBankTransactions gets bank transactions with summed up line item
 // and donation values. It isn't necessary to run this query in a transaction.
-func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus string, dateFrom, dateTo time.Time, search string) ([]BankTransaction, error) {
+func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus string, dateFrom, dateTo time.Time, search string, limit, offset int) ([]BankTransaction, error) {
 
 	// Parameterize the sql query file by replacing the example
 	// variables.
@@ -155,6 +164,8 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 		"AccountCodes":         db.accountCodes,
 		"ReconciliationStatus": reconciliationStatus,
 		"TextSearch":           search,
+		"HereLimit":            limit,
+		"HereOffset":           offset,
 	}
 	if got, want := len(namedArgs), len(query.Parameters); got != want {
 		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
@@ -165,6 +176,11 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 	err = stmt.SelectContext(ctx, &transactions, namedArgs)
 	if err != nil {
 		return nil, fmt.Errorf("bank transactions select error: %v", err)
+	}
+
+	// Return early if no rows were returned.
+	if len(transactions) == 0 {
+		return nil, sql.ErrNoRows
 	}
 	return transactions, nil
 }
@@ -181,11 +197,13 @@ type Donation struct {
 	CreatedName     *string    `db:"created_by_name"`
 	ModifiedDate    *time.Time `db:"last_modified_date"`
 	ModifiedName    *string    `db:"last_modified_by_name"`
+	IsLinked        bool       `db:"is_linked"`
+	RowCount        int        `db:"row_count"`
 }
 
 // GetDonations retrieves donations from the database with the specified
 // filters.
-func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, linkageStatus, payoutReference, search string) ([]Donation, error) {
+func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, linkageStatus, payoutReference, search string, limit, offset int) ([]Donation, error) {
 
 	// Parameterize the sql query file by replacing the example
 	// variables.
@@ -218,16 +236,23 @@ func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, link
 		"LinkageStatus":   linkageStatus,
 		"PayoutReference": payoutReference,
 		"TextSearch":      search,
+		"HereLimit":       limit,
+		"HereOffset":      offset,
 	}
 	if got, want := len(namedArgs), len(query.Parameters); got != want {
 		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
 	}
+	// _ = os.WriteFile("/tmp/parsed_query.sql", []byte(stmt.QueryString+"\n"+strings.Join(stmt.Params, " | ")+fmt.Sprintf("\n%#v\n", namedArgs)), 0644) // temporary
 
 	// Use sqlx to scan results into the provided slice.
 	var donations []Donation
 	err = stmt.SelectContext(ctx, &donations, namedArgs)
 	if err != nil {
 		return nil, fmt.Errorf("donations select error: %v", err)
+	}
+	// Return early if no rows were returned.
+	if len(donations) == 0 {
+		return nil, sql.ErrNoRows
 	}
 	return donations, nil
 }
@@ -245,7 +270,7 @@ type WRInvoice struct {
 	Total         float64   `db:"total"`
 	DonationTotal float64   `db:"donation_total"`
 	CRMSTotal     float64   `db:"crms_total"`
-	IsReconciled  bool      `db:"is_reconciled"`
+	IsReconciled  *bool     `db:"is_reconciled"`
 }
 
 // WRLineItem is the line item component of a wide rows invoice with
@@ -333,7 +358,7 @@ type WRTransaction struct {
 	Total         float64   `db:"total"`
 	DonationTotal float64   `db:"donation_total"`
 	CRMSTotal     float64   `db:"crms_total"`
-	IsReconciled  bool      `db:"is_reconciled"`
+	IsReconciled  *bool     `db:"is_reconciled"`
 }
 
 // GetTransactionWR (a wide rows query) retrieves a single invoice from

@@ -13,6 +13,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func ptrTime(ti time.Time) *time.Time { return &ti }
+
+func ptrStr(s string) *string { return &s }
+
+func ptrBool(b bool) *bool { return &b }
+
+func ptrFloat64(f float64) *float64 { return &f }
+
+// TestInvoicesQuery test the database invoice records.
 func TestInvoicesQuery(t *testing.T) {
 
 	accountCodes := "^(53|55|57)"
@@ -24,21 +33,28 @@ func TestInvoicesQuery(t *testing.T) {
 	}
 
 	tests := []struct {
+		name                 string
 		reconciliationStatus string
 		dateFrom             time.Time
 		dateTo               time.Time
 		searchString         string
+		limit, offset        int
 
-		noRecords   int
+		err error
+
+		RecordsNo   int
 		lastInvoice Invoice
 	}{
 
 		{
+			name:                 "7 unreconciled records",
 			reconciliationStatus: "NotReconciled",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "",
-			noRecords:            7,
+			limit:                10,
+			offset:               -1,
+			RecordsNo:            7,
 			lastInvoice: Invoice{
 				InvoiceID:     "inv-unrec-06",
 				InvoiceNumber: "INV-2025-108",
@@ -48,14 +64,18 @@ func TestInvoicesQuery(t *testing.T) {
 				DonationTotal: 2000,
 				CRMSTotal:     0,
 				IsReconciled:  false,
+				RowCount:      7,
 			},
 		},
 		{
+			name:                 "1 reconciled records",
 			reconciliationStatus: "Reconciled",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "",
-			noRecords:            1,
+			limit:                10,
+			offset:               0,
+			RecordsNo:            1,
 			lastInvoice: Invoice{
 				InvoiceID:     "inv-002",
 				InvoiceNumber: "INV-2025-102",
@@ -65,22 +85,30 @@ func TestInvoicesQuery(t *testing.T) {
 				DonationTotal: 200,
 				CRMSTotal:     200,
 				IsReconciled:  true,
+				RowCount:      1,
 			},
 		},
 		{
+			name:                 "out of date not found records",
 			reconciliationStatus: "All",
 			dateFrom:             time.Date(2023, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2024, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "",
-			noRecords:            0,
+			limit:                10,
+			offset:               0,
+			RecordsNo:            0,
+			err:                  sql.ErrNoRows,
 		},
 
 		{
+			name:                 "all 8 records",
 			reconciliationStatus: "All",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "",
-			noRecords:            8,
+			limit:                10,
+			offset:               0,
+			RecordsNo:            8,
 			lastInvoice: Invoice{
 				InvoiceID:     "inv-unrec-06",
 				InvoiceNumber: "INV-2025-108",
@@ -90,14 +118,39 @@ func TestInvoicesQuery(t *testing.T) {
 				DonationTotal: 2000,
 				CRMSTotal:     0,
 				IsReconciled:  false,
+				RowCount:      8,
 			},
 		},
 		{
+			name:                 "8 records offset 4",
+			reconciliationStatus: "All",
+			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "",
+			limit:                4,
+			offset:               4,
+			RecordsNo:            4, // number of records
+			lastInvoice: Invoice{
+				InvoiceID:     "inv-unrec-06",
+				InvoiceNumber: "INV-2025-108",
+				Date:          time.Date(2025, time.May, 5, 15, 0, 0, 0, time.UTC),
+				ContactName:   "Major Donor Pledge",
+				Total:         2000,
+				DonationTotal: 2000,
+				CRMSTotal:     0,
+				IsReconciled:  false,
+				RowCount:      8, // the full row count for pagination
+			},
+		},
+		{
+			name:                 "example search record",
 			reconciliationStatus: "All",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "Example", // a regex
-			noRecords:            1,
+			limit:                10,
+			offset:               0,
+			RecordsNo:            1,
 			lastInvoice: Invoice{
 				InvoiceID:     "inv-001",
 				InvoiceNumber: "INV-2025-101",
@@ -107,14 +160,18 @@ func TestInvoicesQuery(t *testing.T) {
 				DonationTotal: 500,
 				CRMSTotal:     550,
 				IsReconciled:  false,
+				RowCount:      1,
 			},
 		},
 		{
+			name:                 "example search record notreconciled",
 			reconciliationStatus: "NotReconciled",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "INV-2025.*Ex.*Corp", // a regex
-			noRecords:            1,
+			limit:                10,
+			offset:               0,
+			RecordsNo:            1,
 			lastInvoice: Invoice{
 				InvoiceID:     "inv-001",
 				InvoiceNumber: "INV-2025-101",
@@ -124,18 +181,22 @@ func TestInvoicesQuery(t *testing.T) {
 				DonationTotal: 500,
 				CRMSTotal:     550,
 				IsReconciled:  false,
+				RowCount:      1,
 			},
 		},
 	}
 
 	for ii, tt := range tests {
-		t.Run(fmt.Sprintf("test_%d", ii), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d_%s", ii, tt.name), func(t *testing.T) {
 
-			invoices, err := db.GetInvoices(ctx, tt.reconciliationStatus, tt.dateFrom, tt.dateTo, tt.searchString)
+			invoices, err := db.GetInvoices(ctx, tt.reconciliationStatus, tt.dateFrom, tt.dateTo, tt.searchString, tt.limit, tt.offset)
 			if err != nil {
-				t.Fatalf("get invoices error: %v", err)
+				if err != tt.err {
+					t.Fatalf("got invoices error: %v", err)
+				}
+				return
 			}
-			if got, want := len(invoices), tt.noRecords; got != want {
+			if got, want := len(invoices), tt.RecordsNo; got != want {
 				t.Fatalf("got %d records want %d records", got, want)
 			}
 			if len(invoices) == 0 {
@@ -148,6 +209,7 @@ func TestInvoicesQuery(t *testing.T) {
 	}
 }
 
+// TestBankTransactionsQuery tests the database bank transactions.
 func TestBankTransactionsQuery(t *testing.T) {
 
 	accountCodes := "^(53|55|57)"
@@ -159,21 +221,28 @@ func TestBankTransactionsQuery(t *testing.T) {
 	}
 
 	tests := []struct {
+		name                 string
 		reconciliationStatus string
 		dateFrom             time.Time
 		dateTo               time.Time
 		searchString         string
+		limit, offset        int
 
-		noRecords       int
+		err error
+
+		RecordsNo       int
 		lastTransaction BankTransaction
 	}{
 
 		{
+			name:                 "get 7 not reconciled records",
 			reconciliationStatus: "NotReconciled",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "",
-			noRecords:            7,
+			limit:                -1,
+			offset:               0,
+			RecordsNo:            7,
 			lastTransaction: BankTransaction{
 				ID:            "bt-unrec-06",
 				Reference:     "STRIPE-PAYOUT-2025-05-04",
@@ -183,14 +252,18 @@ func TestBankTransactionsQuery(t *testing.T) {
 				DonationTotal: 340,
 				CRMSTotal:     0,
 				IsReconciled:  false,
+				RowCount:      7, // for pagination
 			},
 		},
 		{
+			name:                 "get 1 reconciled record",
 			reconciliationStatus: "Reconciled",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "",
-			noRecords:            1,
+			limit:                -1,
+			offset:               0,
+			RecordsNo:            1,
 			lastTransaction: BankTransaction{
 				ID:            "bt-001",
 				Reference:     "JG-PAYOUT-2025-04-15",
@@ -200,14 +273,18 @@ func TestBankTransactionsQuery(t *testing.T) {
 				DonationTotal: 355.0,
 				CRMSTotal:     355.0,
 				IsReconciled:  true,
+				RowCount:      1,
 			},
 		},
 		{
+			name:                 "get all 8 records",
 			reconciliationStatus: "All",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			searchString:         "",
-			noRecords:            8,
+			limit:                -1,
+			offset:               0,
+			RecordsNo:            8,
 			lastTransaction: BankTransaction{
 				ID:            "bt-unrec-06",
 				Reference:     "STRIPE-PAYOUT-2025-05-04",
@@ -217,21 +294,50 @@ func TestBankTransactionsQuery(t *testing.T) {
 				DonationTotal: 340,
 				CRMSTotal:     0,
 				IsReconciled:  false,
+				RowCount:      8,
 			},
 		},
 		{
-			reconciliationStatus: "All",
-			dateFrom:             time.Date(2023, 4, 1, 0, 0, 0, 0, time.Local),
-			dateTo:               time.Date(2024, 3, 31, 0, 0, 0, 0, time.Local),
-			searchString:         "",
-			noRecords:            0,
-		},
-		{
+			name:                 "get 1 of 8 records offset 7",
 			reconciliationStatus: "All",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			searchString:         "",
+			limit:                1,
+			offset:               7,
+			RecordsNo:            1, // number of returned records
+			lastTransaction: BankTransaction{
+				ID:            "bt-unrec-06",
+				Reference:     "STRIPE-PAYOUT-2025-05-04",
+				Date:          time.Date(2025, time.May, 4, 9, 0, 0, 0, time.UTC),
+				ContactName:   "Stripe",
+				Total:         332.5,
+				DonationTotal: 340,
+				CRMSTotal:     0,
+				IsReconciled:  false,
+				RowCount:      8, // for pagination
+			},
+		},
+		{
+			name:                 "get no records",
+			reconciliationStatus: "All",
+			dateFrom:             time.Date(2023, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2024, 3, 31, 0, 0, 0, 0, time.Local),
+			limit:                -1,
+			offset:               0,
+			searchString:         "",
+			RecordsNo:            0,
+			err:                  sql.ErrNoRows,
+		},
+		{
+			name:                 "search record",
+			reconciliationStatus: "All",
+			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			limit:                -1,
+			offset:               0,
 			searchString:         "ENTH.*04-28",
-			noRecords:            1,
+			RecordsNo:            1,
 			lastTransaction: BankTransaction{
 				ID:            "bt-unrec-03",
 				Reference:     "ENTHUSE-PAYOUT-2025-04-28",
@@ -241,18 +347,22 @@ func TestBankTransactionsQuery(t *testing.T) {
 				DonationTotal: 115,
 				CRMSTotal:     0,
 				IsReconciled:  false,
+				RowCount:      1,
 			},
 		},
 	}
 
 	for ii, tt := range tests {
-		t.Run(fmt.Sprintf("test_%d", ii), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d_%s", ii, tt.name), func(t *testing.T) {
 
-			transactions, err := db.GetBankTransactions(ctx, tt.reconciliationStatus, tt.dateFrom, tt.dateTo, tt.searchString)
+			transactions, err := db.GetBankTransactions(ctx, tt.reconciliationStatus, tt.dateFrom, tt.dateTo, tt.searchString, tt.limit, tt.offset)
 			if err != nil {
-				t.Fatalf("get bank transactions error: %v", err)
+				if err != tt.err {
+					t.Fatalf("got bank transactions error: %v", err)
+				}
+				return
 			}
-			if got, want := len(transactions), tt.noRecords; got != want {
+			if got, want := len(transactions), tt.RecordsNo; got != want {
 				t.Fatalf("got %d records want %d records", got, want)
 			}
 			if len(transactions) == 0 {
@@ -265,18 +375,7 @@ func TestBankTransactionsQuery(t *testing.T) {
 	}
 }
 
-func ptrTime(ti time.Time) *time.Time {
-	return &ti
-}
-
-func ptrStr(s string) *string {
-	return &s
-}
-
-func ptrFloat64(f float64) *float64 {
-	return &f
-}
-
+// TestDonationsQuery tests the donation SQL records.
 func TestDonationsQuery(t *testing.T) {
 
 	accountCodes := "^(53|55|57)"
@@ -288,41 +387,29 @@ func TestDonationsQuery(t *testing.T) {
 	}
 
 	tests := []struct {
+		name            string
 		dateFrom        time.Time
 		dateTo          time.Time
 		linkageStatus   string
 		payoutReference string
 		searchString    string
+		limit, offset   int
 
-		noRecords  int
+		err error
+
+		RecordsNo  int
 		lastRecord Donation
 	}{
 		{
+			name:            "all 21 records",
 			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			linkageStatus:   "All",
 			payoutReference: "",
 			searchString:    "",
-			noRecords:       21,
-			lastRecord: Donation{
-				ID:              "sf-opp-odd-02",
-				Name:            "Unlinked Donation",
-				Amount:          75,
-				CloseDate:       ptrTime(time.Date(2025, 4, 30, 0, 0, 0, 0, time.UTC)),
-				PayoutReference: nil,
-				CreatedDate:     nil,
-				CreatedName:     nil,
-				ModifiedDate:    nil,
-				ModifiedName:    nil,
-			},
-		},
-		{
-			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
-			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
-			linkageStatus:   "Linked",
-			payoutReference: "",
-			searchString:    "",
-			noRecords:       17,
+			limit:           -1,
+			offset:          0,
+			RecordsNo:       21,
 			lastRecord: Donation{
 				ID:              "sf-opp-odd-01",
 				Name:            "Data Entry Error Donation",
@@ -333,15 +420,79 @@ func TestDonationsQuery(t *testing.T) {
 				CreatedName:     nil,
 				ModifiedDate:    nil,
 				ModifiedName:    nil,
+				IsLinked:        true,
+				RowCount:        21,
 			},
 		},
 		{
+			name:            "all 21 records limited to 0",
+			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			linkageStatus:   "All",
+			payoutReference: "",
+			searchString:    "",
+			limit:           0,
+			offset:          0,
+			err:             sql.ErrNoRows,
+		},
+		{
+			name:            "all 17 linked records",
+			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			linkageStatus:   "Linked",
+			payoutReference: "",
+			searchString:    "",
+			limit:           20,
+			offset:          0,
+			RecordsNo:       17,
+			lastRecord: Donation{
+				ID:              "sf-opp-odd-01",
+				Name:            "Data Entry Error Donation",
+				Amount:          50,
+				CloseDate:       ptrTime(time.Date(2025, 6, 10, 0, 0, 0, 0, time.UTC)),
+				PayoutReference: ptrStr("INV-2025-101"),
+				CreatedDate:     nil,
+				CreatedName:     nil,
+				ModifiedDate:    nil,
+				ModifiedName:    nil,
+				IsLinked:        true,
+				RowCount:        17,
+			},
+		},
+		{
+			name:            "all 17 linked records limited to last 7",
+			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
+			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
+			linkageStatus:   "Linked",
+			payoutReference: "",
+			searchString:    "",
+			limit:           10,
+			offset:          10,
+			RecordsNo:       7, // number of records after limiting
+			lastRecord: Donation{
+				ID:              "sf-opp-odd-01",
+				Name:            "Data Entry Error Donation",
+				Amount:          50,
+				CloseDate:       ptrTime(time.Date(2025, 6, 10, 0, 0, 0, 0, time.UTC)),
+				PayoutReference: ptrStr("INV-2025-101"),
+				CreatedDate:     nil,
+				CreatedName:     nil,
+				ModifiedDate:    nil,
+				ModifiedName:    nil,
+				IsLinked:        true,
+				RowCount:        17, // for pagination
+			},
+		},
+		{
+			name:            "search for 1 linked record",
 			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			linkageStatus:   "Linked",
 			payoutReference: "INV-2025-101",
 			searchString:    "Data Entry",
-			noRecords:       1,
+			limit:           -1,
+			offset:          0,
+			RecordsNo:       1,
 			lastRecord: Donation{
 				ID:              "sf-opp-odd-01",
 				Name:            "Data Entry Error Donation",
@@ -352,15 +503,20 @@ func TestDonationsQuery(t *testing.T) {
 				CreatedName:     nil,
 				ModifiedDate:    nil,
 				ModifiedName:    nil,
+				IsLinked:        true,
+				RowCount:        1,
 			},
 		},
 		{
+			name:            "list 4 unlinked records",
 			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			linkageStatus:   "NotLinked",
 			payoutReference: "",
 			searchString:    "",
-			noRecords:       4,
+			limit:           -1,
+			offset:          0,
+			RecordsNo:       4,
 			lastRecord: Donation{
 				ID:              "sf-opp-odd-02",
 				Name:            "Unlinked Donation",
@@ -371,15 +527,20 @@ func TestDonationsQuery(t *testing.T) {
 				CreatedName:     nil,
 				ModifiedDate:    nil,
 				ModifiedName:    nil,
+				IsLinked:        false,
+				RowCount:        4,
 			},
 		},
 		{
+			name:            "search 1 unlinked record",
 			dateFrom:        time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			linkageStatus:   "NotLinked",
 			payoutReference: "",
 			searchString:    "Unlinked Donation",
-			noRecords:       1,
+			limit:           -1,
+			offset:          0,
+			RecordsNo:       1,
 			lastRecord: Donation{
 				ID:              "sf-opp-odd-02",
 				Name:            "Unlinked Donation",
@@ -390,18 +551,26 @@ func TestDonationsQuery(t *testing.T) {
 				CreatedName:     nil,
 				ModifiedDate:    nil,
 				ModifiedName:    nil,
+				IsLinked:        false,
+				RowCount:        1,
 			},
 		},
 	}
 
 	for ii, tt := range tests {
-		t.Run(fmt.Sprintf("test_%d", ii), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d_%s", ii, tt.name), func(t *testing.T) {
 
-			donations, err := db.GetDonations(ctx, tt.dateFrom, tt.dateTo, tt.linkageStatus, tt.payoutReference, tt.searchString)
+			donations, err := db.GetDonations(ctx, tt.dateFrom, tt.dateTo, tt.linkageStatus, tt.payoutReference, tt.searchString, tt.limit, tt.offset)
+			if err != nil {
+				if err != tt.err {
+					t.Fatalf("get donations error: %v", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("get donations error: %v", err)
 			}
-			if got, want := len(donations), tt.noRecords; got != want {
+			if got, want := len(donations), tt.RecordsNo; got != want {
 				t.Fatalf("got %d records want %d records", got, want)
 			}
 			if len(donations) == 0 {
@@ -414,7 +583,7 @@ func TestDonationsQuery(t *testing.T) {
 	}
 }
 
-// printInvoiceLineItems is a helper print function.
+// printInvoiceLineItems is a helper template print function.
 func printInvoiceLineItems(t *testing.T, invoice WRInvoice, lineItems []WRLineItem) {
 	t.Helper()
 	tpl := `template output:
@@ -465,7 +634,7 @@ func TestInvoiceWithLineItemsQuery(t *testing.T) {
 				Total:         196.5,
 				DonationTotal: 200,
 				CRMSTotal:     200,
-				IsReconciled:  true,
+				IsReconciled:  ptrBool(true),
 			},
 			lineItems: []WRLineItem{
 				WRLineItem{
@@ -498,7 +667,7 @@ func TestInvoiceWithLineItemsQuery(t *testing.T) {
 				Total:         50,
 				DonationTotal: 50,
 				CRMSTotal:     0,
-				IsReconciled:  false,
+				IsReconciled:  ptrBool(false),
 			},
 			lineItems: []WRLineItem{
 				{
@@ -566,7 +735,7 @@ func TestBankTransactionsWithLineItemsQuery(t *testing.T) {
 				Total:         190,
 				DonationTotal: 200,
 				CRMSTotal:     200,
-				IsReconciled:  true,
+				IsReconciled:  ptrBool(true),
 			},
 			lineItems: []WRLineItem{
 				{

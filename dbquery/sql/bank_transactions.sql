@@ -14,8 +14,10 @@ WITH variables AS (
         ,date('2026-03-31') AS DateTo    /* @param */
         ,'^(53|55|57).*' AS AccountCodes /* @param */
         -- All | Reconciled | NotReconciled
-        ,'All' AS ReconciliationStatus   /* @param */
-        ,'ENTH.*04-28' AS TextSearch     /* @param */ 
+        ,'NotReconciled' AS ReconciliationStatus   /* @param */
+        ,'' AS TextSearch     /* @param */ 
+        ,10 AS HereLimit                 /* @param */
+        ,0 AS HereOffset                 /* @param */
 )
 
 ,bank_transaction_donation_totals AS (
@@ -30,10 +32,10 @@ WITH variables AS (
         AND
         b.status NOT IN ('DRAFT', 'DELETED', 'VOIDED')
         AND
-        date BETWEEN variables.DateFrom AND variables.DateTo
+        b.date BETWEEN variables.DateFrom AND variables.DateTo
     GROUP BY
         li.transaction_id
-), 
+),
 
 crms_donation_totals AS (
     SELECT
@@ -58,28 +60,45 @@ crms_donation_totals AS (
         ,b.total
         ,COALESCE(bdt.total_donation_amount, 0) AS donation_total
         ,COALESCE(cdt.total_crms_amount, 0) AS crms_total
+        ,COUNT(*) OVER () AS row_count
     FROM bank_transactions b
     JOIN variables v ON b.date BETWEEN v.DateFrom AND v.DateTo
     LEFT JOIN bank_transaction_donation_totals bdt ON b.id = bdt.transaction_id
     LEFT JOIN crms_donation_totals cdt ON b.reference = cdt.payout_reference_dfk
     WHERE
         b.status NOT IN ('DRAFT', 'DELETED', 'VOIDED')
-        AND bdt.transaction_id IS NOT NULL 
+        AND
+        b.date BETWEEN v.DateFrom AND v.DateTo
+        AND (
+            (v.ReconciliationStatus = 'All')
+            OR
+            (
+                v.ReconciliationStatus = 'Reconciled'
+                 AND 
+                 COALESCE(bdt.total_donation_amount, 0) = COALESCE(cdt.total_crms_amount, 0)
+            )
+            OR
+            (
+                v.ReconciliationStatus = 'NotReconciled'
+                 AND 
+                 COALESCE(bdt.total_donation_amount, 0) <> COALESCE(cdt.total_crms_amount, 0)
+            )
+        )
+        AND
+        bdt.transaction_id IS NOT NULL 
         AND CASE
             WHEN v.TextSearch = '' THEN true
             ELSE CONCAT(b.reference, ' ', b.contact_name) REGEXP v.TextSearch
             END
+    ORDER BY
+        b.date ASC
 )
-SELECT 
-    r.*,
-    (donation_total = crms_total) AS is_reconciled
-FROM 
-    reconciliation_data r
-JOIN variables v
-WHERE
-    (v.ReconciliationStatus = 'All')
-    OR
-    (v.ReconciliationStatus = 'Reconciled' AND r.donation_total = r.crms_total)
-    OR
-    (v.ReconciliationStatus = 'NotReconciled' AND r.donation_total <> r.crms_total);
+SELECT
+    r.*
+    ,donation_total = crms_total AS is_reconciled
+FROM reconciliation_data r
+LIMIT
+    (SELECT variables.HereLimit FROM variables)
+OFFSET
+    (SELECT variables.HereOffset FROM variables)
 ;
