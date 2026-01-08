@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jmoiron/sqlx" // helper library
@@ -29,10 +31,14 @@ type DB struct {
 }
 
 // New creates a new connection to an SQLite database at the given path.
-func New(path string, accountCodes string) (*DB, error) {
-	dbDB, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)", path))
+func New(dbPath, sqlDir string, accountCodes string) (*DB, error) {
+	dbDB, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)", dbPath))
 	if err != nil {
 		return nil, err
+	}
+
+	if _, err := os.Stat(sqlDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("sql directory %q not found", sqlDir)
 	}
 
 	// RegisterFunctions registers the custom REXEXP function. This can
@@ -50,23 +56,23 @@ func New(path string, accountCodes string) (*DB, error) {
 	}
 
 	// Prepare all the statements.
-	db.getInvoicesStmt, err = db.prepNamedStatement("sql/invoices.sql")
+	db.getInvoicesStmt, err = db.prepNamedStatement(filepath.Join(sqlDir, "invoices.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("invoices statement error: %w", err)
 	}
-	db.getBankTransactionsStmt, err = db.prepNamedStatement("sql/bank_transactions.sql")
+	db.getBankTransactionsStmt, err = db.prepNamedStatement(filepath.Join(sqlDir, "bank_transactions.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("bank_transactions statement error: %w", err)
 	}
-	db.getDonationsStmt, err = db.prepNamedStatement("sql/donations.sql")
+	db.getDonationsStmt, err = db.prepNamedStatement(filepath.Join(sqlDir, "donations.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("donations statement error: %w", err)
 	}
-	db.getInvoiceWRStmt, err = db.prepNamedStatement("sql/invoice.sql")
+	db.getInvoiceWRStmt, err = db.prepNamedStatement(filepath.Join(sqlDir, "invoice.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("invoice statement error: %w", err)
 	}
-	db.getBankTransactionWRStmt, err = db.prepNamedStatement("sql/bank_transaction.sql")
+	db.getBankTransactionWRStmt, err = db.prepNamedStatement(filepath.Join(sqlDir, "bank_transaction.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("bank_transaction statement error: %w", err)
 	}
@@ -97,13 +103,13 @@ type Invoice struct {
 	InvoiceNumber string    `db:"invoice_number"`
 	Date          time.Time `db:"date"`
 	ContactName   string    `db:"contact_name"`
+	Status        string    `db:"status"`
 	Total         float64   `db:"total"`
 	DonationTotal float64   `db:"donation_total"`
 	CRMSTotal     float64   `db:"crms_total"`
 	IsReconciled  bool      `db:"is_reconciled"`
 	RowCount      int       `db:"row_count"`
 	// UpdatedDateUTC string     `db:"UpdatedDateUTC"`
-	// Status         string     `db:"Status"`
 	// Reference      string     `db:"Reference,omitempty"`
 	// AmountPaid     float64    `json:"AmountPaid"`
 }

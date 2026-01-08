@@ -27,7 +27,7 @@ func TestInvoicesQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", accountCodes)
+	db, err := New("testdata/test.db", "./sql", accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -60,6 +60,7 @@ func TestInvoicesQuery(t *testing.T) {
 				InvoiceNumber: "INV-2025-108",
 				Date:          time.Date(2025, time.May, 5, 15, 0, 0, 0, time.UTC),
 				ContactName:   "Major Donor Pledge",
+				Status:        "PAID",
 				Total:         2000,
 				DonationTotal: 2000,
 				CRMSTotal:     0,
@@ -81,6 +82,7 @@ func TestInvoicesQuery(t *testing.T) {
 				InvoiceNumber: "INV-2025-102",
 				Date:          time.Date(2025, time.April, 12, 11, 0, 0, 0, time.UTC),
 				ContactName:   "Generous Individual",
+				Status:        "PAID",
 				Total:         196.5,
 				DonationTotal: 200,
 				CRMSTotal:     200,
@@ -114,6 +116,7 @@ func TestInvoicesQuery(t *testing.T) {
 				InvoiceNumber: "INV-2025-108",
 				Date:          time.Date(2025, time.May, 5, 15, 0, 0, 0, time.UTC),
 				ContactName:   "Major Donor Pledge",
+				Status:        "PAID",
 				Total:         2000,
 				DonationTotal: 2000,
 				CRMSTotal:     0,
@@ -135,6 +138,7 @@ func TestInvoicesQuery(t *testing.T) {
 				InvoiceNumber: "INV-2025-108",
 				Date:          time.Date(2025, time.May, 5, 15, 0, 0, 0, time.UTC),
 				ContactName:   "Major Donor Pledge",
+				Status:        "PAID",
 				Total:         2000,
 				DonationTotal: 2000,
 				CRMSTotal:     0,
@@ -156,6 +160,7 @@ func TestInvoicesQuery(t *testing.T) {
 				InvoiceNumber: "INV-2025-101",
 				Date:          time.Date(2025, time.April, 10, 10, 0, 0, 0, time.UTC),
 				ContactName:   "Example Corp Ltd",
+				Status:        "PAID",
 				Total:         500,
 				DonationTotal: 500,
 				CRMSTotal:     550,
@@ -177,6 +182,7 @@ func TestInvoicesQuery(t *testing.T) {
 				InvoiceNumber: "INV-2025-101",
 				Date:          time.Date(2025, time.April, 10, 10, 0, 0, 0, time.UTC),
 				ContactName:   "Example Corp Ltd",
+				Status:        "PAID",
 				Total:         500,
 				DonationTotal: 500,
 				CRMSTotal:     550,
@@ -215,7 +221,7 @@ func TestBankTransactionsQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", accountCodes)
+	db, err := New("testdata/test.db", "./sql", accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -381,7 +387,7 @@ func TestDonationsQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", accountCodes)
+	db, err := New("testdata/test.db", "./sql", accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -609,7 +615,7 @@ func TestInvoiceWithLineItemsQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", accountCodes)
+	db, err := New("testdata/test.db", "./sql", accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -711,7 +717,7 @@ func TestBankTransactionsWithLineItemsQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", accountCodes)
+	db, err := New("testdata/test.db", "./sql", accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
