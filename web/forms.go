@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/gorilla/schema"
@@ -44,6 +43,13 @@ func (v *Validator) Check(ok bool, key, message string) {
 	}
 }
 
+// FieldError is a helper to check if the specified field has triggered
+// an error.
+func (v *Validator) FieldError(field string) bool {
+	_, ok := v.Errors[field]
+	return ok
+}
+
 // ------------------------------------------------------------------------------
 // Forms
 // ------------------------------------------------------------------------------
@@ -74,9 +80,7 @@ func defaultDateToAndFrom() (time.Time, time.Time) {
 
 // NewSearchForm creates a SearchForm with defaults.
 func NewSearchForm() *SearchForm {
-
 	dateFrom, dateTo := defaultDateToAndFrom()
-
 	return &SearchForm{
 		ReconciliationStatus: "NotReconciled",
 		DateFrom:             dateFrom,
@@ -85,13 +89,14 @@ func NewSearchForm() *SearchForm {
 	}
 }
 
-// Validate checks SearchForm fields and populates Validator with any errors.
+// Validate checks SearchForm fields and populates Validator with any
+// errors. Note tha the `Check` is like an assertion of truth, if that
+// fails, the provided message is recorded against the field.
 func (f *SearchForm) Validate(v *Validator) {
 
+	// Reconciliation status is one of three valid states.
 	allowedStatus := map[string]bool{"All": true, "Reconciled": true, "NotReconciled": true}
 	v.Check(allowedStatus[f.ReconciliationStatus], "status", "Invalid status value provided.")
-	// remove spaces from status so that "Not Reconciled" -> "NotReconciled".
-	f.ReconciliationStatus = strings.ReplaceAll(f.ReconciliationStatus, " ", "")
 
 	v.Check(!f.DateTo.Before(f.DateFrom), "date-to", "End date cannot be before the start date.")
 	v.Check(!f.DateFrom.IsZero(), "date-from", "From date must be provided.")
