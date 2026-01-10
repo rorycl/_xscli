@@ -9,8 +9,8 @@ import (
 
 // Pagination is a pagination helper type for use on listing pages.
 type Pagination struct {
-	queryVals url.Values
 	pageLen   int
+	queryVals url.Values
 
 	PageNo   int
 	Pages    int
@@ -26,70 +26,77 @@ func (p *Pagination) pageCount(recNo int) int {
 var ErrInvalidPageLen error = errors.New("pageLen cannot be below 1")
 
 type ErrInvalidPageNo struct {
-	pageNo     int
-	totalPages int
+	PageNo     int
+	TotalPages int
 }
 
-func (i ErrInvalidPageNo) Error() string {
-	return fmt.Sprintf("page %d more than total pages %d", i.pageNo, i.totalPages)
+func (e ErrInvalidPageNo) Error() string {
+	return fmt.Sprintf("invalid page number: %d (total pages: %d)", e.PageNo, e.TotalPages)
 }
 
 // NewPagination calculates the pagination setting for the provided
 // pageLen (number of items to show per page), the current page number,
 // the total records in the current set and the present url values. The
 // url values are used for determining the url (if any) for the "Next"
-// and "Previous" pages. Consumers may wish to ignore the error as a
-// valid Pagination is always returned, but it // is wise to log it at least.
-func NewPagination(pageLen, totalRecordsNo int, vals url.Values) (*Pagination, error) {
+// and "Previous" pages.
+func NewPagination(pageLen, totalRecords, currentPage int, query url.Values) (*Pagination, error) {
 
-	// set default
+	if pageLen <= 0 {
+		pageLen = 1
+	}
+
+	totalPages := 1
+	if totalRecords > 0 {
+		totalPages = ((totalRecords - 1) / pageLen) + 1
+	}
+
+	if currentPage < 1 {
+		currentPage = 1
+	}
+	if currentPage > totalPages {
+		return nil, ErrInvalidPageNo{PageNo: currentPage, TotalPages: totalPages}
+	}
 	pg := &Pagination{
 		pageLen:   pageLen,
-		queryVals: vals,
-		PageNo:    1,
-		Pages:     1,
-		Next:      0,
-		Previous:  0,
+		queryVals: query,
+		PageNo:    currentPage,
+		Pages:     totalPages,
 	}
 
-	if pageLen < 1 {
-		return pg, ErrInvalidPageLen
-	}
-
-	var err error
-	pg.PageNo, err = strconv.Atoi(pg.queryVals.Get("page"))
-	if err != nil {
-		pg.PageNo = 1
-	}
-	pg.Pages = pg.pageCount(totalRecordsNo)
-	if pg.PageNo > pg.Pages {
-		return pg, ErrInvalidPageNo{pg.PageNo, pg.Pages}
-	}
 	if pg.PageNo > 1 {
 		pg.Previous = pg.PageNo - 1
 	}
+
 	if pg.PageNo < pg.Pages {
 		pg.Next = pg.PageNo + 1
 	}
+
 	return pg, nil
 }
 
-func (p *Pagination) pageURL(page int) string {
-	if page == 0 {
-		return "?" + p.queryVals.Encode()
-	}
-	newQuery := url.Values{}
+// buildURL generates a URL query string for a specific page.
+func (p *Pagination) buildURL(page int) string {
+	newQuery := make(url.Values, len(p.queryVals))
 	for k, v := range p.queryVals {
 		newQuery[k] = v
 	}
+
 	newQuery.Set("page", strconv.Itoa(page))
 	return "?" + newQuery.Encode()
 }
 
+// NextURL returns the URL for the next page. Returns empty string if no next page.
 func (p *Pagination) NextURL() string {
-	return p.pageURL(p.Next)
+	if p.Next == 0 {
+		return ""
+	}
+	return p.buildURL(p.Next)
 }
 
+// PreviousURL returns the URL for the previous page. Returns empty string if no prev page.
 func (p *Pagination) PreviousURL() string {
-	return p.pageURL(p.Previous)
+	if p.Previous == 0 {
+		return ""
+	}
+	return p.buildURL(p.Previous)
 }
