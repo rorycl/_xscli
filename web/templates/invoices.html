@@ -52,29 +52,58 @@
         <form class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end text-sm p-4 pt-2 bg-indigo-100">
             <div>
                 <label for="status" class="block font-semibold text-xs text-slate-700 pb-1 mt-1">Status</label>
-                <select id="status" name="status" class="border mt-1 block rounded-md w-full border-1 border-slate-400 shadow-sm bg-white focus:border-sky-500 p-1.5 focus:ring-sky-500">
-                    <option>Unreconciled</option>
-                    <option>Reconciled</option>
-                    <option>All</option>
+                <select id="status"
+                        name="status"
+                        class="border mt-1 block rounded-md w-full border-1 shadow-sm bg-white focus:border-sky-500 p-1.5 focus:ring-sky-500
+                               {{- if .Validator.FieldError "status"}} border-red-500 border-2 {{- else }} border-slate-400 {{- end}}">
+
+                    <option value="NotReconciled" {{ if (eq "NotReconciled" .Form.ReconciliationStatus ) }}selected{{ end }}>Not Reconciled</option>
+                    <option value="Reconciled" {{ if (eq "Reconciled" .Form.ReconciliationStatus ) }}selected{{ end }}>Reconciled</option>
+                    <option value="All" {{ if (eq "All" .Form.ReconciliationStatus ) }}selected{{ end }}>All</option>
                 </select>
             </div>
             <div>
                 <label for="date-from" class="block font-semibold text-xs text-slate-700 pb-1 mt-1">Date From</label>
-                <input type="date" id="date-from" name="date-from" value="2025-07-01" class="mt-1 block bg-white w-full rounded-md border-1 border-slate-400 shadow-sm p-1.5 focus:border-sky-500 focus:ring-sky-500">
+                <input type="date"
+                       id="date-from"
+                       name="date-from" 
+                       value="{{ if .Form.DateFrom }}{{ .Form.DateFrom.Format "2006-01-02" }}{{ else }}2025-07-01{{end}}"
+                       class="mt-1 block bg-white w-full rounded-md border-1 border-slate-400 shadow-sm p-1.5 focus:border-sky-500 focus:ring-sky-500 
+                              {{- if .Validator.FieldError "date-from" }} border-red-500 border-2 {{- else }} border-slate-400 {{- end}}">
             </div>
             <div>
                 <label for="date-to" class="block font-semibold text-xs text-slate-700 pb-1 mt-1">Date To</label>
-                <input type="date" id="date-to" name="date-to" value="2026-06-30" class="mt-1 block bg-white w-full rounded-md border-1 border-slate-400 shadow-sm p-1.5 focus:border-sky-500 focus:ring-sky-500">
+                <input type="date"
+                       id="date-to"
+                       name="date-to"
+                       value="{{ if .Form.DateFrom }}{{.Form.DateTo.Format "2006-01-02" }}{{ else }}2026-06-30{{end}}"
+                       class="mt-1 block bg-white w-full rounded-md border-1 border-slate-400 shadow-sm p-1.5 focus:border-sky-500 focus:ring-sky-500
+                              {{- if .Validator.FieldError "date-to" }} border-red-400 border-4 {{- else }} border-slate-400 {{- end}}">
             </div>
             <div class="md:col-span-1">
                 <label for="search" class="block font-semibold text-xs text-slate-700 pb-1 mt-1">Search Text</label>
-                <input type="text" id="search" name="search" value="" class="mt-1 block bg-white w-full rounded-md border-1 border-slate-400 shadow-sm p-1.5 focus:border-sky-500 focus:ring-sky-500">
+                <input type="text" 
+                       id="search"
+                       name="search"
+                       value="{{ .Form.SearchString }}"
+                       class="mt-1 block bg-white w-full rounded-md border-1 border-slate-400 shadow-sm p-1.5 focus:border-sky-500 focus:ring-sky-500">
             </div>
             <div class="md:col-span-1 flex space-x-2">
-                <button type="submit" class="w-full bg-slate-500 text-white font-bold py-2 px-4 rounded hover:bg-slate-600 transition-colors">Reset</button>
+                <a href="/invoices" class="w-full text-center bg-slate-500 text-white font-bold py-2 px-4 rounded hover:bg-slate-600 transition-colors">Reset</a>
                 <button type="submit" class="w-full bg-sky-600 text-white font-bold py-2 px-4 rounded hover:bg-sky-700 transition-colors">Search</button>
             </div>
         </form>
+
+        <!-- form errors -->
+        {{ if eq false .Validator.Valid }}
+        <div class="w-full p-4 pt-0 bg-indigo-100 text-xs text-red-700">
+            <ul class="list-disc list-inside text-red-700 space-y-1">
+            {{ range .Validator.Errors }}
+            <li>{{ . }}</li>
+            {{ end }}
+            </ul>
+        </div>
+        {{ end }}
 
         <div class="border-t-2 border-dotted border-slate-400 bg-slate-100 mb-4"></div>
 
@@ -88,8 +117,8 @@
                     <tr>
                         <th class="px-4 py-2 text-left font-semibold">No.</th>
                         <th class="px-4 py-2 text-left font-semibold">Date</th>
-                        <th class="px-4 py-2 text-left font-semibold">To</th>
-                        <th class="px-4 py-2 text-left font-semibold">Description</th>
+                        <th class="min-w-3/8 px-4 py-2 text-left font-semibold ">To</th>
+                        <th class="px-4 py-2 text-left font-semibold">Status</th>
                         <th class="px-4 py-2 text-right font-semibold">Total</th>
                         <th class="px-4 py-2 text-right font-semibold">Donations</th>
                         <th class="px-4 py-2 text-center font-semibold">Status</th>
@@ -98,12 +127,13 @@
                 <tbody class="bg-white divide-y divide-slate-300">
                     {{ range .Invoices }}
                     <tr class="hover:bg-slate-50">
+                        <!-- {{ .InvoiceID }} -->
                         <td class="px-4 py-1"><a href="/invoice" class="text-sky-700 font-semibold hover:underline">{{ .InvoiceNumber }}</a></td>
                         <td class="px-4 py-1 whitespace-nowrap">{{ .Date.Format "02/01/2006" }}</td>
                         <td class="px-4 py-1">{{ .ContactName }}</td>
-                        <td class="px-4 py-1 max-w-xs truncate">{{ .Description }}</td>
+                        <td class="px-4 py-1">{{ .Status }}</td>
                         <td class="px-4 py-1 text-right font-mono">{{ printf "%.2f" .Total }}</td>
-                        <td class="px-4 py-1 text-right font-mono">{{ printf "%.2f" .DonationsTotal }}</td>
+                        <td class="px-4 py-1 text-right font-mono">{{ printf "%.2f" .DonationTotal }}</td>
                         <td class="px-4 py-1 text-center">
                             {{ if .IsReconciled }}
                             <span class="inline-flex items-center rounded-full bg-green-100 px-4 py-1 text-xs font-medium text-green-700">OK</span>
@@ -112,6 +142,10 @@
                             {{ end }}
                         </td>
                     </tr>
+                    {{ else }}
+                    <tr>
+                        <td colspan="7" class="px-4 py-3">There are no records to display.</td>
+                    </tr>
                     {{ end }}
                 </tbody>
             </table>
@@ -119,8 +153,28 @@
         <!-- </div> -->
 
     <!-- Pagination -->
-    <div class="pb-2 mb-2 text-center text-xs text-slate-800">
-        page 1 of 1
+    <div class="mt-4 pb-2 mb-2 text-center text-xs text-slate-800">
+        {{ $URL := .Pagination.PreviousURL }}
+        {{ if $URL }}
+            <a href="{{ $URL }}" 
+               class="px-3 py-1 border border-indigo-300 rounded hover:bg-indigo-100">&laquo; Prev</a>
+        {{ else }}
+            <span class="text-slate-400 cursor-not-allowed">&laquo; Prev</span>
+        {{ end }}
+
+        <span class="mx-4">
+        page {{ .Pagination.PageNo }} of {{ .Pagination.Pages }}
+        </span>
+
+        {{ $URL := .Pagination.NextURL }}
+        {{ if $URL }}
+            <a href="{{ $URL }}"
+               class="px-3 py-1 border border-indigo-300 rounded hover:bg-indigo-100">Next &raquo;</a>
+        {{ else }}
+            <span class="text-slate-400 cursor-not-allowed">Next &raquo;</span>
+        {{ end }}
+
+
     </div>
     <!-- end frame -->
     </div>
