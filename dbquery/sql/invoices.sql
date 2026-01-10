@@ -89,7 +89,7 @@ crms_donation_totals AS (
         idt.invoice_id IS NOT NULL
         AND CASE
             WHEN v.TextSearch = '' THEN true
-            ELSE CONCAT(i.invoice_number, ' ', i.reference, ' ', i.contact_name) REGEXP v.TextSearch
+            ELSE LOWER(CONCAT(i.invoice_number, ' ', i.reference, ' ', i.contact_name)) REGEXP LOWER(v.TextSearch)
             END
     ORDER BY
         i.date ASC

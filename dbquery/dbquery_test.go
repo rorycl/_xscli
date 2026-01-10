@@ -151,7 +151,7 @@ func TestInvoicesQuery(t *testing.T) {
 			reconciliationStatus: "All",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
-			searchString:         "Example", // a regex
+			searchString:         "example", // a regex which is a lower() to lower() match so (sort of) an iregex
 			limit:                10,
 			offset:               0,
 			RecordsNo:            1,
@@ -173,7 +173,7 @@ func TestInvoicesQuery(t *testing.T) {
 			reconciliationStatus: "NotReconciled",
 			dateFrom:             time.Date(2025, 4, 1, 0, 0, 0, 0, time.Local),
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
-			searchString:         "INV-2025.*Ex.*Corp", // a regex
+			searchString:         "inv-2025.*ex.*corp", // a regex which is a lower() to lower() match so (sort of) an iregex
 			limit:                10,
 			offset:               0,
 			RecordsNo:            1,
@@ -342,7 +342,7 @@ func TestBankTransactionsQuery(t *testing.T) {
 			dateTo:               time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			limit:                -1,
 			offset:               0,
-			searchString:         "ENTH.*04-28",
+			searchString:         "ENTH.*04-28", // a regex which is a lower() to lower() match so (sort of) an iregex
 			RecordsNo:            1,
 			lastTransaction: BankTransaction{
 				ID:            "bt-unrec-03",
@@ -495,7 +495,7 @@ func TestDonationsQuery(t *testing.T) {
 			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			linkageStatus:   "Linked",
 			payoutReference: "INV-2025-101",
-			searchString:    "Data Entry",
+			searchString:    "data entry", // a regex which is a lower() to lower() match so (sort of) an iregex
 			limit:           -1,
 			offset:          0,
 			RecordsNo:       1,
@@ -543,7 +543,7 @@ func TestDonationsQuery(t *testing.T) {
 			dateTo:          time.Date(2026, 3, 31, 0, 0, 0, 0, time.Local),
 			linkageStatus:   "NotLinked",
 			payoutReference: "",
-			searchString:    "Unlinked Donation",
+			searchString:    "unlinked donation", // a regex which is a lower() to lower() match so (sort of) an iregex
 			limit:           -1,
 			offset:          0,
 			RecordsNo:       1,

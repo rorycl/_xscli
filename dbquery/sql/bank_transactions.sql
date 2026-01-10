@@ -88,7 +88,7 @@ crms_donation_totals AS (
         bdt.transaction_id IS NOT NULL 
         AND CASE
             WHEN v.TextSearch = '' THEN true
-            ELSE CONCAT(b.reference, ' ', b.contact_name) REGEXP v.TextSearch
+            ELSE LOWER(CONCAT(b.reference, ' ', b.contact_name)) REGEXP LOWER(v.TextSearch)
             END
     ORDER BY
         b.date ASC

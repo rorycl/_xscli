@@ -124,7 +124,7 @@ WITH variables AS (
             WHEN v.TextSearch = '' OR v.TextSearch IS NULL THEN
                 TRUE
             ELSE
-                CONCAT(s.name, ' ', s.payout_reference_dfk) REGEXP v.TextSearch
+                LOWER(CONCAT(s.name, ' ', s.payout_reference_dfk)) REGEXP LOWER(v.TextSearch)
         END
     ORDER BY
         s.close_date ASC
