@@ -204,7 +204,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 func handleInvoices(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
-	templates := []string{"templates/base.html", "templates/invoices.html"}
+	templates := []string{"templates/base.html", "templates/partial-listingTabs.html", "templates/invoices.html"}
 
 	form := NewSearchForm()
 	if err := DecodeURLParams(r, form); err != nil {
@@ -223,16 +223,18 @@ func handleInvoices(w http.ResponseWriter, r *http.Request) {
 	// Prepare data for the template, allowing passing of validation
 	// errors back to the template if necessary.
 	data := struct {
-		PageTitle  string
-		Invoices   []dbquery.Invoice
-		Form       *SearchForm
-		Validator  *Validator
-		Pagination *Pagination
+		PageTitle   string
+		Invoices    []dbquery.Invoice
+		Form        *SearchForm
+		Validator   *Validator
+		Pagination  *Pagination
+		CurrentPage string
 	}{
-		PageTitle:  "Home",
-		Form:       form,
-		Validator:  validator,
-		Pagination: pagination,
+		PageTitle:   "Home",
+		Form:        form,
+		Validator:   validator,
+		Pagination:  pagination,
+		CurrentPage: "invoices",
 	}
 
 	// Render template with errors and return if the form is invalid.

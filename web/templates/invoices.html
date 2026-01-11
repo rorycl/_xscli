@@ -20,31 +20,7 @@
     </div>
 
     <!-- Tabs -->
-    <nav>
-        <!--
-        flex          : layout tabs horizontally
-        items end     : align tabs to bottom if any are a different height
-        relative z-10 : sits on top of content below
-        -mb-px        : pull down by one px
-        -->
-        <ul class="flex flex-wrap items-end text-sm font-medium text-center gap-2">
-            <li class="me-2">
-                <a href="/home" aria-current="page"
-                   class="relative z-10 inline-block px-4 py-2 text-sky-700 font-bold bg-indigo-100 border border-slate-400
-                   border-b-blue-100 rounded-t-md -mb-px">Invoices</a>
-            </li>
-            <li class="me-2">
-                <a href="#"
-                   class="inline-block px-4 py-2 text-slate-500 bg-slate-100 border border-slate-400
-                   border-b-slate-100 hover:border-b-slate-200 hover:bg-slate-200 hover:text-sky-800 rounded-t-md">Bank Transactions</a>
-            </li>
-            <li class="me-2">
-                <a href="#"
-                   class="inline-block px-4 py-2 text-slate-500 bg-slate-100 border border-slate-400
-                   border-b-slate-100 hover:border-b-slate-200 hover:bg-slate-200 hover:text-sky-800 rounded-t-md">Donations</a>
-            </li>
-        </ul>
-    </nav>
+    {{ template "listingTabs" .CurrentPage }}
 
     <div class="relative overflow-x-auto text-black border border-slate-400 rounded-md rounded-tr-lg rounded-b-lg rounded-tl-none">
 

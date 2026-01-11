@@ -1,0 +1,40 @@
+{{ define "listingTabs" }}
+    <!-- Tabs -->
+    <nav>
+        <!--
+        flex          : layout tabs horizontally
+        items end     : align tabs to bottom if any are a different height
+        relative z-10 : sits on top of content below
+        -mb-px        : pull down by one px
+        -->
+        {{ $currentPage := . }}
+        {{ with $focusClass := "relative z-10 inline-block px-4 py-2 text-sky-700 font-bold bg-indigo-100 border border-slate-400 border-b-blue-100 rounded-t-md -mb-px" }}
+        {{ with $noFocusClass := "inline-block px-4 py-2 text-slate-500 bg-slate-100 border border-slate-400 border-b-slate-100 hover:border-b-slate-200 hover:bg-slate-200 hover:text-sky-800 rounded-t-md" }}
+
+        <ul class="flex flex-wrap items-end text-sm font-medium text-center gap-2">
+            <li class="me-2">
+                {{ if eq $currentPage "invoices" }}
+                <a href="/invoices" aria-current="page" class="{{ $focusClass }}">Invoices</a>
+                {{ else }}
+                <a href="/invoices" aria-current="page" class="{{ $noFocusClass }}">Invoices</a>
+                {{ end }}
+            </li>
+            <li class="me-2">
+                {{ if eq $currentPage "bank-transactions" }}
+                <a href="/bank-transactions" aria-current="page" class="{{ $focusClass }}">Bank Transactions</a>
+                {{ else }}
+                <a href="/bank-transactions" aria-current="page" class="{{ $noFocusClass }}">Bank Transactions</a>
+                {{ end }}
+            </li>
+            <li class="me-2">
+                {{ if eq $currentPage "donations" }}
+                <a href="/donations" aria-current="page" class="{{ $focusClass }}">Donations</a>
+                {{ else }}
+                <a href="/donations" aria-current="page" class="{{ $noFocusClass }}">Donations</a>
+                {{ end }}
+            </li>
+        </ul>
+        {{ end }}
+        {{ end }}
+    </nav>
+{{ end }}
