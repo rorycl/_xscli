@@ -111,6 +111,50 @@ func (f *SearchForm) Offset() int {
 	return (f.Page - 1) * pageLen
 }
 
+// SearchDonationsForm represents the URL query parameter filters for
+// donations.
+type SearchDonationsForm struct {
+	LinkageStatus   string    `schema:"status"`
+	DateFrom        time.Time `schema:"date-from"`
+	DateTo          time.Time `schema:"date-to"`
+	PayoutReference string    `schema:"payout-reference"`
+	SearchString    string    `schema:"search"`
+	Page            int       `schema:"page"`
+}
+
+// NewSearchDonationsForm creates a SearchDonationsForm with defaults.
+func NewSearchDonationsForm() *SearchDonationsForm {
+	dateFrom, dateTo := defaultDateToAndFrom()
+	return &SearchDonationsForm{
+		LinkageStatus: "NotLinked",
+		DateFrom:      dateFrom,
+		DateTo:        dateTo,
+		Page:          1, // 1-based pagination.
+	}
+}
+
+// Validate checks SearchDonationsForm fields and populates Validator with any
+// errors. Note tha the `Check` is like an assertion of truth, if that
+// fails, the provided message is recorded against the field.
+func (f *SearchDonationsForm) Validate(v *Validator) {
+
+	// Reconciliation status is one of three valid states.
+	allowedStatus := map[string]bool{"All": true, "Linked": true, "NotLinked": true}
+	v.Check(allowedStatus[f.LinkageStatus], "status", "Invalid status value provided.")
+
+	v.Check(!f.DateTo.Before(f.DateFrom), "date-to", "End date cannot be before the start date.")
+	v.Check(!f.DateFrom.IsZero(), "date-from", "From date must be provided.")
+
+	if f.Page < 1 {
+		f.Page = 1
+	}
+}
+
+// Offset calculates the database offset for (1-based) pagination.
+func (f *SearchDonationsForm) Offset() int {
+	return (f.Page - 1) * pageLen
+}
+
 // ------------------------------------------------------------------------------
 // General decoding funcs
 // ------------------------------------------------------------------------------

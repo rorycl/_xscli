@@ -78,7 +78,7 @@ var accountCodes = "^(53|55|57)"
 var db *dbquery.DB
 
 // pageLen is the number of items listed on a page
-const pageLen = 5
+const pageLen = 15
 
 // pageNo calculates the number of pages in a database result set.
 func pageNo(recNo int) int {
@@ -138,9 +138,12 @@ func main() {
 		r.HandleFunc("/connect", handleConnect)
 		r.HandleFunc("/refresh", handleRefresh)
 		r.HandleFunc("/home", handleHome) // will also serve /invoices
+
 		r.HandleFunc("/invoice", handleInvoiceDetail)
+
 		r.HandleFunc("/invoices", handleInvoices)
 		r.HandleFunc("/bank-transactions", handleBankTransactions)
+		r.HandleFunc("/donations", handleDonations)
 
 		r.HandleFunc("/", handleRedirectToConnect)
 
@@ -357,6 +360,138 @@ func handleBankTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderTemplate(w, "bank_transactions", templates, data)
+}
+
+// handleDonations serves the transactions list.
+func handleDonations(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+	templates := []string{"templates/base.html", "templates/partial-listingTabs.html", "templates/donations.html"}
+
+	// viewDonation  is a view version of the dbquery.Donations type,
+	// with non-pointer fields.
+	type viewDonation struct {
+		ID              string
+		Name            string
+		Amount          float64
+		CloseDateStr    string
+		PayoutReference any // string or specific web-safe template.HTML
+		CreatedDateStr  string
+		CreatedName     string
+		ModifiedDateStr string
+		ModifiedName    string
+		IsLinked        bool
+		RowCount        int
+	}
+
+	newViewDonations := func(donations []dbquery.Donation) []viewDonation {
+		dv := make([]viewDonation, len(donations))
+		for i, d := range donations {
+			dv[i].ID = d.ID
+			dv[i].Name = d.Name
+			dv[i].Amount = d.Amount
+			dv[i].IsLinked = d.IsLinked
+			dv[i].RowCount = d.RowCount
+			// de-pointer
+			if d.PayoutReference == nil {
+				dv[i].PayoutReference = template.HTML("&mdash;")
+			} else {
+				dv[i].PayoutReference = *d.PayoutReference
+			}
+			if d.CloseDate != nil {
+				dv[i].CloseDateStr = d.CloseDate.Format("02/01/2006")
+			}
+			if d.CreatedDate != nil {
+				dv[i].CreatedDateStr = d.CreatedDate.Format("02/01/2006")
+			}
+			if d.ModifiedDate != nil {
+				dv[i].ModifiedDateStr = d.ModifiedDate.Format("02/01/2006")
+			}
+			if d.CreatedName != nil {
+				dv[i].CreatedName = *d.CreatedName
+			}
+			if d.ModifiedName != nil {
+				dv[i].ModifiedName = *d.ModifiedName
+			}
+		}
+		return dv
+	}
+
+	form := NewSearchDonationsForm()
+	if err := DecodeURLParams(r, form); err != nil {
+		log.Printf("error: could not decode the url parameters: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Create a validator and validate the form.
+	validator := NewValidator()
+	form.Validate(validator)
+
+	// Initialise pagination for default state.
+	pagination, _ := NewPagination(pageLen, 1, form.Page, r.URL.Query())
+
+	// Prepare data for the template, allowing passing of validation
+	// errors back to the template if necessary.
+	data := struct {
+		PageTitle     string
+		ViewDonations []viewDonation
+		Form          *SearchDonationsForm
+		Validator     *Validator
+		Pagination    *Pagination
+		CurrentPage   string
+	}{
+		PageTitle:   "Donations",
+		Form:        form,
+		Validator:   validator,
+		Pagination:  pagination,
+		CurrentPage: "donations",
+	}
+
+	// Render template with errors and return if the form is invalid.
+	if !validator.Valid() {
+		renderTemplate(w, "donations", templates, data)
+		return
+	}
+
+	donations, err := db.GetDonations(
+		ctx,
+		form.DateFrom,
+		form.DateTo,
+		form.LinkageStatus,
+		form.PayoutReference,
+		form.SearchString,
+		pageLen,
+		form.Offset(),
+	)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("error: database GetDonations failed: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Process donations into donationView type
+	viewDonations := newViewDonations(donations)
+
+	// Set valid data from successful database call.
+	data.ViewDonations = viewDonations
+
+	// Set pagination for number of donations. In case of an error, log
+	// and continue. Each donation has the search query row count as a
+	// field.
+	var recordsNo int
+	if len(data.ViewDonations) == 0 {
+		recordsNo = 1
+	} else {
+		recordsNo = data.ViewDonations[0].RowCount
+	}
+	data.Pagination, err = NewPagination(pageLen, recordsNo, form.Page, r.URL.Query())
+	if err != nil {
+		log.Printf("pagination error: %v", err)
+		http.Redirect(w, r, "/donations", http.StatusFound)
+	}
+
+	renderTemplate(w, "donations", templates, data)
 }
 
 // handleInvoiceDetail serves the detail page for a single invoice.
