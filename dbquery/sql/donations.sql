@@ -17,7 +17,7 @@ WITH variables AS (
         ,date('2026-03-31') AS DateTo  /* @param */
         -- All | Linked | NotLinked
         ,'All' AS LinkageStatus        /* @param */
-        ,'' AS PayoutReference         /* @param */
+        ,'INV-2025-101' AS PayoutReference         /* @param */
         ,'' AS TextSearch              /* @param */
         ,30 AS HereLimit               /* @param */
         ,0 AS HereOffset               /* @param */
@@ -125,6 +125,13 @@ WITH variables AS (
                 TRUE
             ELSE
                 LOWER(CONCAT(s.name, ' ', s.payout_reference_dfk)) REGEXP LOWER(v.TextSearch)
+        END
+        AND
+        CASE
+            WHEN v.PayoutReference = '' OR v.PayoutReference IS NULL THEN
+                TRUE
+            ELSE
+                LOWER(s.payout_reference_dfk) = LOWER(v.PayoutReference)
         END
     ORDER BY
         s.close_date ASC
