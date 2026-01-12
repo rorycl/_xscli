@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"sync"
 	"time"
@@ -139,7 +138,8 @@ func main() {
 		r.HandleFunc("/refresh", handleRefresh)
 		r.HandleFunc("/home", handleHome) // will also serve /invoices
 
-		r.HandleFunc("/invoice", handleInvoiceDetail)
+		// An invoice is identified by a uuid in Xero, a simple word in test data.
+		r.HandleFunc("/invoice/{id:[A-Za-z0-9_-]+}", handleInvoiceDetail)
 
 		r.HandleFunc("/invoices", handleInvoices)
 		r.HandleFunc("/bank-transactions", handleBankTransactions)
@@ -496,29 +496,87 @@ func handleDonations(w http.ResponseWriter, r *http.Request) {
 
 // handleInvoiceDetail serves the detail page for a single invoice.
 func handleInvoiceDetail(w http.ResponseWriter, r *http.Request) {
-	// Simple mock routing based on the URL path segment.
-	invoiceID := path.Base(r.URL.Path)
 
-	var invoice Invoice
-	if invoiceID == "reconciled-example" {
-		invoice = getDummyReconciledInvoice()
-	} else {
-		// Default to the unreconciled view for any other ID.
-		invoice = getDummyUnreconciledInvoice()
+	ctx := r.Context()
+	templates := []string{"templates/base.html", "templates/partial-listingTabs.html", "templates/invoice.html"}
+
+	vars := mux.Vars(r)
+	if vars == nil {
+		log.Printf("error: invoiceID capture (vars: %v)", mux.Vars(r))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+	invoiceID, ok := vars["id"]
+	if !ok {
+		log.Printf("error: id not in mux.Vars (vars: %v)", mux.Vars(r))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+
+	// viewLineItems is a view version of the dbquery.WRLineItem with
+	// non-pointer fields.
+	type viewLineItem struct {
+		AccountCode    string
+		AccountName    string
+		Description    string
+		TaxAmount      float64
+		LineAmount     float64
+		DonationAmount float64
+	}
+
+	newViewLineItems := func(lineItems []dbquery.WRLineItem) []viewLineItem {
+		viewItems := make([]viewLineItem, len(lineItems))
+		for i, li := range lineItems {
+			if li.AccountCode != nil {
+				viewItems[i].AccountCode = *li.AccountCode
+			}
+			if li.AccountName != nil {
+				viewItems[i].AccountName = *li.AccountName
+			}
+			if li.Description != nil {
+				viewItems[i].Description = *li.Description
+			}
+			if li.TaxAmount != nil {
+				viewItems[i].TaxAmount = *li.TaxAmount
+			}
+			if li.LineAmount != nil {
+				viewItems[i].LineAmount = *li.LineAmount
+			}
+			if li.DonationAmount == nil {
+				dv[i].PayoutReference = template.HTML("&mdash;")
+			} else {
+				viewItems[i].DonationAmount = *li.DonationAmount
+			}
+		}
+		return viewItems
 	}
 
 	data := struct {
 		PageTitle string
-		Invoice   Invoice
+		Invoice   dbquery.WRInvoice
+		LineItems []viewLineItem
+		// temp!!!!
 		Donations []Donation // For the "find donations" search result mock
-		LineItems []Invoice
 	}{
-		PageTitle: fmt.Sprintf("Invoice %s", invoice.InvoiceNumber),
-		Invoice:   invoice,
+		PageTitle: fmt.Sprintf("Invoice %s", invoiceID),
 		Donations: getDummySearchDonations(),
-		LineItems: getDummyInvoices(),
 	}
-	templates := []string{"templates/base.html", "templates/invoice.html"}
+
+	var err error
+	var lineItems []dbquery.WRLineItem
+	data.Invoice, lineItems, err = db.GetInvoiceWR(ctx, invoiceID)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("error: database GetInvoices failed: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	data.LineItems = newViewLineItems(lineItems)
+
+	// Return a 404 if no invoice was found.
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, fmt.Sprintf("Invoice %q not found", invoiceID), http.StatusNotFound)
+		return
+	}
+
 	renderTemplate(w, "invoice", templates, data)
 }
 
@@ -536,110 +594,6 @@ func renderTemplate(w http.ResponseWriter, name string, templates []string, data
 
 // Dummy data providers
 // These functions simulate fetching data from a database.
-
-func getDummyInvoices() []Invoice {
-	return []Invoice{
-		{
-			UUID:           "unreconciled-example",
-			InvoiceNumber:  "INV-0234",
-			Date:           time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
-			ContactName:    "James Galway",
-			Description:    "James Galway (family) Donation",
-			Total:          117.48,
-			DonationsTotal: 0.00,
-			IsReconciled:   false,
-		},
-		{
-			UUID:           "reconciled-example",
-			InvoiceNumber:  "INV-0236",
-			Date:           time.Date(2025, 7, 3, 0, 0, 0, 0, time.UTC),
-			ContactName:    "Julie Joyce",
-			Description:    "STO J. Joyce Standing Order",
-			Total:          50.00,
-			DonationsTotal: 50.00,
-			IsReconciled:   true,
-		},
-	}
-}
-
-func getDummyUnreconciledInvoice() Invoice {
-	return Invoice{
-		UUID:            "d4754673-da9f-11f0-b492-8c16455f785b",
-		InvoiceNumber:   "INV-0234",
-		Date:            time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
-		ContactName:     "James Galway",
-		Description:     "James Galway (family) Donation as set out in the agreement...",
-		Total:           117.20,
-		DonationsTotal:  0.00,
-		IsReconciled:    false,
-		LinkedDonations: []Donation{}, // Empty slice
-		LineItems: []LineItem{
-			LineItem{
-				Description: "Stripe donation",
-				UnitAmount:  200.00,
-				AccountCode: "412",
-				LineItemID:  "eab3ce9f-dd31-11f0-8de1-8c16455f785b",
-				Quantity:    1,
-				TaxAmount:   0.00,
-				LineAmount:  200.00,
-			},
-			LineItem{
-				Description: "Stripe platform fees",
-				UnitAmount:  -2.80,
-				AccountCode: "500",
-				LineItemID:  "1bf7ffcf-dd32-11f0-b2d3-8c16455f785b",
-				Quantity:    1,
-				TaxAmount:   0.00,
-				LineAmount:  -2.80,
-			},
-		},
-	}
-}
-
-func getDummyReconciledInvoice() Invoice {
-	linkedDonations := []Donation{
-		{
-			UUID:        "sf-don-001",
-			Date:        time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
-			ContactName: "James Galway",
-			Campaign:    "Recurring Donor",
-			Description: "Recurring monthly gift",
-			Amount:      117.20,
-			PayoutRef:   "d4754673-da9f-11f0-b492-8c16455f785b",
-		},
-	}
-	return Invoice{
-		UUID:            "d4754673-da9f-11f0-b492-8c16455f785b",
-		InvoiceNumber:   "INV-0234",
-		Date:            time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
-		ContactName:     "James Galway",
-		Description:     "James Galway (family) Donation as set out in the agreement...",
-		Total:           117.20,
-		DonationsTotal:  117.20,
-		IsReconciled:    true,
-		LinkedDonations: linkedDonations,
-		LineItems: []LineItem{
-			LineItem{
-				Description: "Stripe donation",
-				UnitAmount:  200.00,
-				AccountCode: "412",
-				LineItemID:  "eab3ce9f-dd31-11f0-8de1-8c16455f785b",
-				Quantity:    1,
-				TaxAmount:   0.00,
-				LineAmount:  200.00,
-			},
-			LineItem{
-				Description: "Stripe platform fees",
-				UnitAmount:  -2.80,
-				AccountCode: "500",
-				LineItemID:  "1bf7ffcf-dd32-11f0-b2d3-8c16455f785b",
-				Quantity:    1,
-				TaxAmount:   0.00,
-				LineAmount:  -2.80,
-			},
-		},
-	}
-}
 
 func getDummySearchDonations() []Donation {
 	return []Donation{
