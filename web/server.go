@@ -21,46 +21,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type Invoice struct {
-	UUID            string
-	InvoiceNumber   string
-	Date            time.Time
-	ContactName     string
-	Description     string
-	Total           float64
-	DonationsTotal  float64
-	IsReconciled    bool
-	LinkedDonations []Donation
-	LineItems       []LineItem // faked for the moment.
-}
-
-type LineItem struct {
-	Description string
-	UnitAmount  float64
-	AccountCode string
-	LineItemID  string
-	Quantity    float64
-	TaxAmount   float64
-	LineAmount  float64
-}
-
-func (l *LineItem) IsDonation() bool {
-	if len(l.AccountCode) > 0 && string(l.AccountCode[0]) == "4" {
-		return true
-	}
-	return false
-}
-
-type Donation struct {
-	UUID        string
-	Date        time.Time
-	ContactName string
-	Campaign    string
-	Description string
-	Amount      float64
-	PayoutRef   string
-}
-
 func rebuildTailwind() error {
 	log.Println("rebulding tailwind")
 	cmdArgs := strings.Split(`tailwindcss-linux-x64-v4.0.7 -i static/css/input.css -o static/css/output.css`, " ")
@@ -83,6 +43,11 @@ const pageLen = 15
 func pageNo(recNo int) int {
 	return ((recNo - 1) / pageLen) + 1
 }
+
+// default start and end date for searches
+// Todo: it's better to use nill values to map to SQL NULLS.
+var defaultStartDate = time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
+var defaultEndDate = time.Date(2027, 3, 31, 0, 0, 0, 0, time.UTC)
 
 func main() {
 
@@ -133,19 +98,25 @@ func main() {
 		fs := http.FileServer(http.Dir("./static"))
 		r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
 
-		// Register page handlers.
+		// Intro pages.
 		r.HandleFunc("/connect", handleConnect)
 		r.HandleFunc("/refresh", handleRefresh)
 		r.HandleFunc("/home", handleHome) // will also serve /invoices
 
-		// An invoice is identified by a uuid in Xero, a simple word in test data.
-		r.HandleFunc("/invoice/{id:[A-Za-z0-9_-]+}", handleInvoiceDetail)
-
+		// Main listing pages.
 		r.HandleFunc("/invoices", handleInvoices)
 		r.HandleFunc("/bank-transactions", handleBankTransactions)
 		r.HandleFunc("/donations", handleDonations)
 
-		r.HandleFunc("/", handleRedirectToConnect)
+		// An invoice is identified by a uuid in Xero, a simple word in test data.
+		r.HandleFunc("/invoice/{id:[A-Za-z0-9_-]+}", handleInvoiceDetail)
+		r.HandleFunc("/bank-transaction/{id:[A-Za-z0-9_-]+}", handleBankTransactionDetail)
+
+		// partials for the invoice and bank-transaction detail pages.
+		// Linked donations deals with both invoices and
+		// bank-transactions. (?:...) is a non capturing group.
+		r.HandleFunc("/partials/donations-linked/{type:(?:invoice|bank-transaction)}/{id}", handlePartialDonationsLinked)
+		r.HandleFunc("/partials/donations-find", handlePartialDonationsFind)
 
 		logging := func(handler http.Handler) http.Handler {
 			return handlers.CombinedLoggingHandler(os.Stdout, handler)
@@ -366,56 +337,7 @@ func handleBankTransactions(w http.ResponseWriter, r *http.Request) {
 func handleDonations(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
-	templates := []string{"templates/base.html", "templates/partial-listingTabs.html", "templates/donations.html"}
-
-	// viewDonation  is a view version of the dbquery.Donations type,
-	// with non-pointer fields.
-	type viewDonation struct {
-		ID              string
-		Name            string
-		Amount          float64
-		CloseDateStr    string
-		PayoutReference any // string or specific web-safe template.HTML
-		CreatedDateStr  string
-		CreatedName     string
-		ModifiedDateStr string
-		ModifiedName    string
-		IsLinked        bool
-		RowCount        int
-	}
-
-	newViewDonations := func(donations []dbquery.Donation) []viewDonation {
-		dv := make([]viewDonation, len(donations))
-		for i, d := range donations {
-			dv[i].ID = d.ID
-			dv[i].Name = d.Name
-			dv[i].Amount = d.Amount
-			dv[i].IsLinked = d.IsLinked
-			dv[i].RowCount = d.RowCount
-			// de-pointer
-			if d.PayoutReference == nil {
-				dv[i].PayoutReference = template.HTML("&mdash;")
-			} else {
-				dv[i].PayoutReference = *d.PayoutReference
-			}
-			if d.CloseDate != nil {
-				dv[i].CloseDateStr = d.CloseDate.Format("02/01/2006")
-			}
-			if d.CreatedDate != nil {
-				dv[i].CreatedDateStr = d.CreatedDate.Format("02/01/2006")
-			}
-			if d.ModifiedDate != nil {
-				dv[i].ModifiedDateStr = d.ModifiedDate.Format("02/01/2006")
-			}
-			if d.CreatedName != nil {
-				dv[i].CreatedName = *d.CreatedName
-			}
-			if d.ModifiedName != nil {
-				dv[i].ModifiedName = *d.ModifiedName
-			}
-		}
-		return dv
-	}
+	templates := []string{"templates/base.html", "templates/partial-listingTabs.html", "templates/partial-donations-searchform.html", "templates/partial-donations-searchresults.html", "templates/donations.html"}
 
 	form := NewSearchDonationsForm()
 	if err := DecodeURLParams(r, form); err != nil {
@@ -440,12 +362,16 @@ func handleDonations(w http.ResponseWriter, r *http.Request) {
 		Validator     *Validator
 		Pagination    *Pagination
 		CurrentPage   string
+		PageType      string
+		GetURL        string
 	}{
 		PageTitle:   "Donations",
 		Form:        form,
 		Validator:   validator,
 		Pagination:  pagination,
 		CurrentPage: "donations",
+		PageType:    "direct", // indirect pages are htmx pages that have an hx target
+		GetURL:      "/donations",
 	}
 
 	// Render template with errors and return if the form is invalid.
@@ -540,9 +466,7 @@ func handleInvoiceDetail(w http.ResponseWriter, r *http.Request) {
 			if li.LineAmount != nil {
 				viewItems[i].LineAmount = *li.LineAmount
 			}
-			if li.DonationAmount == nil {
-				dv[i].PayoutReference = template.HTML("&mdash;")
-			} else {
+			if li.DonationAmount != nil {
 				viewItems[i].DonationAmount = *li.DonationAmount
 			}
 		}
@@ -553,11 +477,8 @@ func handleInvoiceDetail(w http.ResponseWriter, r *http.Request) {
 		PageTitle string
 		Invoice   dbquery.WRInvoice
 		LineItems []viewLineItem
-		// temp!!!!
-		Donations []Donation // For the "find donations" search result mock
 	}{
 		PageTitle: fmt.Sprintf("Invoice %s", invoiceID),
-		Donations: getDummySearchDonations(),
 	}
 
 	var err error
@@ -580,6 +501,225 @@ func handleInvoiceDetail(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, "invoice", templates, data)
 }
 
+// handleBankTransactionDetail serves the detail page for a single invoice.
+func handleBankTransactionDetail(w http.ResponseWriter, r *http.Request) {
+	_, _ = fmt.Fprint(w, "not yet implemented")
+}
+
+// handlePartialDonationsLinked is the partial htmx endpoint for
+// rendering the list of donations linked to an Invoice or Bank
+// Transaction.
+func handlePartialDonationsLinked(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+	templates := []string{"templates/partial-donations-linked.html"}
+
+	vars := mux.Vars(r)
+	if vars == nil {
+		log.Printf("error: linked donations vars capture (vars: %v)", mux.Vars(r))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+	typer, ok := vars["type"]
+	if !ok {
+		log.Printf("error: type not in mux.Vars (vars: %v)", mux.Vars(r))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+	id, ok := vars["id"]
+	if !ok {
+		log.Printf("error: id not in mux.Vars (vars: %v)", mux.Vars(r))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+
+	// Initialise pagination for default state.
+	// Todo: fix page number (here 1)
+	pagination, _ := NewPagination(pageLen, 1, 1, r.URL.Query())
+
+	// Prepare data for the template.
+	data := struct {
+		Typer         string
+		ViewDonations []viewDonation
+		Pagination    *Pagination
+	}{
+		Typer:      typer,
+		Pagination: pagination,
+	}
+
+	donations, err := db.GetDonations(
+		ctx,
+		defaultStartDate,
+		defaultEndDate,
+		"Linked", // linkage status
+		id,       // payout reference
+		"",       // searchstring
+		pageLen,
+		0, // form offset
+	)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("error: database GetDonations failed: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Process donations into donationView type
+	viewDonations := newViewDonations(donations)
+
+	// Set valid data from successful database call.
+	data.ViewDonations = viewDonations
+
+	// Set pagination for number of donations. In case of an error, log
+	// and continue. Each donation has the search query row count as a
+	// field.
+	var recordsNo int
+	if len(data.ViewDonations) == 0 {
+		recordsNo = 1
+	} else {
+		recordsNo = data.ViewDonations[0].RowCount
+	}
+	// Todo: fix url.query() if it doesn't have the "tab"
+	// Todo: fix page number (here 1)
+	data.Pagination, err = NewPagination(pageLen, recordsNo, 1, r.URL.Query())
+	if err != nil {
+		log.Printf("pagination error: %v", err)
+	}
+
+	renderTemplate(w, "partial-donations-linked", templates, data)
+}
+
+// handlePartialDonationsFind is the partial htmx endpoint for finding
+// donations to linked to an Invoice or Bank Transaction.
+func handlePartialDonationsFind(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+	templates := []string{"templates/partial-donations-searchform.html", "templates/partial-donations-searchresults.html", "templates/partial-donations.html"}
+
+	form := NewSearchDonationsForm()
+	if err := DecodeURLParams(r, form); err != nil {
+		log.Printf("error: could not decode the url parameters: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Create a validator and validate the form.
+	validator := NewValidator()
+	form.Validate(validator)
+
+	// Initialise pagination for default state.
+	pagination, _ := NewPagination(pageLen, 1, form.Page, r.URL.Query())
+
+	// Prepare data for the template, allowing passing of validation
+	// errors back to the template if necessary.
+	data := struct {
+		PageTitle     string
+		ViewDonations []viewDonation
+		Form          *SearchDonationsForm
+		Validator     *Validator
+		Pagination    *Pagination
+		PageType      string
+		GetURL        string
+	}{
+		PageTitle:  "Donations",
+		Form:       form,
+		Validator:  validator,
+		Pagination: pagination,
+		PageType:   "indirect", // indirect pages are htmx pages that have an hx target
+		GetURL:     "/partials/donations-find",
+	}
+
+	// Render template with errors and return if the form is invalid.
+	if !validator.Valid() {
+		renderTemplate(w, "partial-donations", templates, data)
+		return
+	}
+
+	donations, err := db.GetDonations(
+		ctx,
+		form.DateFrom,
+		form.DateTo,
+		form.LinkageStatus,
+		form.PayoutReference,
+		form.SearchString,
+		pageLen,
+		form.Offset(),
+	)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("error: database GetDonations failed: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Process donations into donationView type
+	viewDonations := newViewDonations(donations)
+
+	// Set valid data from successful database call.
+	data.ViewDonations = viewDonations
+
+	// Set pagination for number of donations. In case of an error, log
+	// and continue. Each donation has the search query row count as a
+	// field.
+	var recordsNo int
+	if len(data.ViewDonations) == 0 {
+		recordsNo = 1
+	} else {
+		recordsNo = data.ViewDonations[0].RowCount
+	}
+	data.Pagination, err = NewPagination(pageLen, recordsNo, form.Page, r.URL.Query())
+	if err != nil {
+		log.Printf("pagination error: %v", err)
+	}
+
+	renderTemplate(w, "partial-donations", templates, data)
+
+}
+
+// viewDonation  is a view version of the dbquery.Donations type,
+// with non-pointer fields.
+type viewDonation struct {
+	ID              string
+	Name            string
+	Amount          float64
+	CloseDateStr    string
+	PayoutReference any // string or specific web-safe template.HTML
+	CreatedDateStr  string
+	CreatedName     string
+	ModifiedDateStr string
+	ModifiedName    string
+	IsLinked        bool
+	RowCount        int
+}
+
+func newViewDonations(donations []dbquery.Donation) []viewDonation {
+	dv := make([]viewDonation, len(donations))
+	for i, d := range donations {
+		dv[i].ID = d.ID
+		dv[i].Name = d.Name
+		dv[i].Amount = d.Amount
+		dv[i].IsLinked = d.IsLinked
+		dv[i].RowCount = d.RowCount
+		// de-pointer
+		if d.PayoutReference == nil {
+			dv[i].PayoutReference = template.HTML("&mdash;")
+		} else {
+			dv[i].PayoutReference = *d.PayoutReference
+		}
+		if d.CloseDate != nil {
+			dv[i].CloseDateStr = d.CloseDate.Format("02/01/2006")
+		}
+		if d.CreatedDate != nil {
+			dv[i].CreatedDateStr = d.CreatedDate.Format("02/01/2006")
+		}
+		if d.ModifiedDate != nil {
+			dv[i].ModifiedDateStr = d.ModifiedDate.Format("02/01/2006")
+		}
+		if d.CreatedName != nil {
+			dv[i].CreatedName = *d.CreatedName
+		}
+		if d.ModifiedName != nil {
+			dv[i].ModifiedName = *d.ModifiedName
+		}
+	}
+	return dv
+}
+
 // helpers
 
 // renderTemplate is a helper to execute templates and handle errors.
@@ -589,29 +729,5 @@ func renderTemplate(w http.ResponseWriter, name string, templates []string, data
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
 		log.Printf("Error rendering template %s: %v", name, err)
-	}
-}
-
-// Dummy data providers
-// These functions simulate fetching data from a database.
-
-func getDummySearchDonations() []Donation {
-	return []Donation{
-		{
-			UUID:        "sf-don-001",
-			Date:        time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
-			ContactName: "James Galway",
-			Campaign:    "Recurring Donor",
-			Description: "James Galway (family) Donation",
-			Amount:      117.20,
-		},
-		{
-			UUID:        "sf-don-002",
-			Date:        time.Date(2025, 7, 3, 0, 0, 0, 0, time.UTC),
-			ContactName: "Galway Taxis",
-			Campaign:    "Property Dinner 2025",
-			Description: "Galway Taxi Services: one off donation for the...",
-			Amount:      1250.00,
-		},
 	}
 }
