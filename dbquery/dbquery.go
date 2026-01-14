@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -246,6 +247,8 @@ type Donation struct {
 // filters.
 func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, linkageStatus, payoutReference, search string, limit, offset int) ([]Donation, error) {
 
+	log.Printf("GetDonations %s %s linkage %s <%s> %q", dateFrom.Format("2006-01-02"), dateTo.Format("2006-01-02"), linkageStatus, payoutReference, search)
+
 	// Set named statement and parameter list.
 	stmt := db.getDonationsStmt.namedStatement
 	params := db.getDonationsStmt.args
@@ -290,17 +293,18 @@ func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, link
 // WRInvoice is the invoice component of a wide rows invoice with line
 // items query.
 type WRInvoice struct {
-	ID            string    `db:"id"`
-	InvoiceNumber string    `db:"invoice_number"`
-	Date          time.Time `db:"date"`
-	Type          *string   `db:"type"`
-	Status        string    `db:"status"`
-	Reference     *string   `db:"reference"`
-	ContactName   string    `db:"contact_name"`
-	Total         float64   `db:"total"`
-	DonationTotal float64   `db:"donation_total"`
-	CRMSTotal     float64   `db:"crms_total"`
-	IsReconciled  *bool     `db:"is_reconciled"`
+	ID               string    `db:"id"`
+	InvoiceNumber    string    `db:"invoice_number"`
+	Date             time.Time `db:"date"`
+	Type             *string   `db:"type"`
+	Status           string    `db:"status"`
+	Reference        *string   `db:"reference"`
+	ContactName      string    `db:"contact_name"`
+	Total            float64   `db:"total"`
+	DonationTotal    float64   `db:"donation_total"`
+	CRMSTotal        float64   `db:"crms_total"`
+	TotalOutstanding float64   `db:"total_outstanding"`
+	IsReconciled     bool      `db:"is_reconciled"`
 }
 
 // WRLineItem is the line item component of a wide rows invoice with

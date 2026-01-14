@@ -20,6 +20,7 @@ SELECT
      ELSE
         0
      END AS is_reconciled
+    ,total - crms_total AS total_outstanding
 FROM (
     SELECT
         i.id
