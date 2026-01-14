@@ -23,7 +23,7 @@ import (
 
 func rebuildTailwind() error {
 	log.Println("rebulding tailwind")
-	cmdArgs := strings.Split(`tailwindcss-linux-x64-v4.0.7 -i static/css/input.css -o static/css/output.css`, " ")
+	cmdArgs := strings.Split(`tailwindcss-linux-x64-v4.1.18 -i static/css/input.css -o static/css/output.css`, " ")
 	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 	out, err := cmd.CombinedOutput()
 	log.Println(string(out))
