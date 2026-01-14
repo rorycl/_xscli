@@ -1,3 +1,5 @@
+{{- /* partial-donations-tabs.html is a template for donation tab headers */ -}}
+
 {{ define "partial-donations-tabs" }}
 {{ $activeClass := "tab-link relative z-10 inline-block px-4 py-2 text-sky-700 font-bold bg-white border border-slate-400 border-b-white rounded-t-md -mb-px" }}
 {{ $inactiveClass := "tab-link inline-block px-4 py-2 text-slate-500 bg-slate-100 border border-slate-400 border-b-slate-100 hover:border-b-slate-200 hover:bg-slate-200 hover:text-sky-800 rounded-t-md" }}
@@ -14,7 +16,7 @@
                hx-target="#donations-zone"
                hx-swap="innerHTML"
                role="tab" aria-selected="true">
-                Linked Donations {{ .TabType }}
+                Linked Donations
             </a>
         </li>
         <li class="me-2">
@@ -29,7 +31,7 @@
                hx-target="#donations-zone"
                hx-swap="innerHTML"
                role="tab" aria-selected="false">
-                Find Donations {{ .TabType }}
+                Find Donations
             </a>
         </li>
     </ul>
