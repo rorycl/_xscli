@@ -116,7 +116,7 @@ func main() {
 		// Linked donations deals with both invoices and
 		// bank-transactions. (?:...) is a non capturing group.
 		r.HandleFunc("/partials/donations-linked/{type:(?:invoice|bank-transaction)}/{id}", handlePartialDonationsLinked)
-		r.HandleFunc("/partials/donations-find", handlePartialDonationsFind)
+		r.HandleFunc("/partials/donations-find/{type:(?:invoice|bank-transaction)}/{id}", handlePartialDonationsFind)
 
 		logging := func(handler http.Handler) http.Handler {
 			return handlers.CombinedLoggingHandler(os.Stdout, handler)
@@ -424,7 +424,7 @@ func handleDonations(w http.ResponseWriter, r *http.Request) {
 func handleInvoiceDetail(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
-	templates := []string{"templates/base.html", "templates/partial-listingTabs.html", "templates/invoice.html"}
+	templates := []string{"templates/base.html", "templates/partial-listingTabs.html", "templates/partial-donations-tabs.html", "templates/invoice.html"}
 
 	vars := mux.Vars(r)
 	if vars == nil {
@@ -477,8 +477,12 @@ func handleInvoiceDetail(w http.ResponseWriter, r *http.Request) {
 		PageTitle string
 		Invoice   dbquery.WRInvoice
 		LineItems []viewLineItem
+		ID        string
+		TabType   string
 	}{
 		PageTitle: fmt.Sprintf("Invoice %s", invoiceID),
+		ID:        invoiceID,
+		TabType:   "link", // by default the donations tab type is "link", not "find"
 	}
 
 	var err error
@@ -512,7 +516,7 @@ func handleBankTransactionDetail(w http.ResponseWriter, r *http.Request) {
 func handlePartialDonationsLinked(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
-	templates := []string{"templates/partial-donations-linked.html"}
+	templates := []string{"templates/partial-donations-tabs.html", "templates/partial-donations-linked.html"}
 
 	vars := mux.Vars(r)
 	if vars == nil {
@@ -536,12 +540,16 @@ func handlePartialDonationsLinked(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare data for the template.
 	data := struct {
+		ID            string
 		Typer         string
 		ViewDonations []viewDonation
 		Pagination    *Pagination
+		TabType       string
 	}{
+		ID:         id,
 		Typer:      typer,
 		Pagination: pagination,
+		TabType:    "link",
 	}
 
 	donations, err := db.GetDonations(
@@ -586,11 +594,27 @@ func handlePartialDonationsLinked(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePartialDonationsFind is the partial htmx endpoint for finding
-// donations to linked to an Invoice or Bank Transaction.
+// donations to link to an Invoice or Bank Transaction.
 func handlePartialDonationsFind(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
-	templates := []string{"templates/partial-donations-searchform.html", "templates/partial-donations-searchresults.html", "templates/partial-donations.html"}
+	templates := []string{"templates/partial-donations-tabs.html", "templates/partial-donations-searchform.html", "templates/partial-donations-searchresults.html", "templates/partial-donations.html"}
+
+	vars := mux.Vars(r)
+	if vars == nil {
+		log.Printf("error: linked donations vars capture (vars: %v)", mux.Vars(r))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+	typer, ok := vars["type"]
+	if !ok {
+		log.Printf("error: type not in mux.Vars (vars: %v)", mux.Vars(r))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+	id, ok := vars["id"]
+	if !ok {
+		log.Printf("error: id not in mux.Vars (vars: %v)", mux.Vars(r))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 
 	form := NewSearchDonationsForm()
 	if err := DecodeURLParams(r, form); err != nil {
@@ -610,19 +634,26 @@ func handlePartialDonationsFind(w http.ResponseWriter, r *http.Request) {
 	// errors back to the template if necessary.
 	data := struct {
 		PageTitle     string
+		ID            string
+		Typer         string
 		ViewDonations []viewDonation
 		Form          *SearchDonationsForm
 		Validator     *Validator
 		Pagination    *Pagination
-		PageType      string
-		GetURL        string
+
+		PageType string
+		GetURL   string
+		TabType  string
 	}{
 		PageTitle:  "Donations",
+		ID:         id,
+		Typer:      typer,
 		Form:       form,
 		Validator:  validator,
 		Pagination: pagination,
 		PageType:   "indirect", // indirect pages are htmx pages that have an hx target
-		GetURL:     "/partials/donations-find",
+		GetURL:     fmt.Sprintf("/partials/donations-find/%s/%s", typer, id),
+		TabType:    "find",
 	}
 
 	// Render template with errors and return if the form is invalid.
