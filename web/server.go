@@ -17,14 +17,19 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// line item account codes
-var accountCodes = "^(53|55|57)"
+// all vars to be moved to settings.
+var (
 
-// database connection
-var db *dbquery.DB
+	// line item account codes
+	// var accountCodes = "^4[1234].*"
+	accountCodes = "^(53|55|57)"
 
-// pageLen is the number of items listed on a page
-const pageLen = 15
+	// database connection
+	db *dbquery.DB
+
+	// pageLen is the number of items listed on a page
+	pageLen = 15
+)
 
 // pageNo calculates the number of pages in a database result set.
 func pageNo(recNo int) int {
@@ -36,7 +41,7 @@ func pageNo(recNo int) int {
 var defaultStartDate = time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
 var defaultEndDate = time.Date(2027, 3, 31, 0, 0, 0, 0, time.UTC)
 
-const inDevelopment bool = false
+const inDevelopment bool = true
 
 // horrible global to remove
 var mounts *fileMounts
