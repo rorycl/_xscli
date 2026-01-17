@@ -17,6 +17,16 @@ type parameterizedStmt struct {
 	args           []string
 }
 
+const debug = false
+
+// logQuery is for helping debug SQL issues.
+func logQuery(name, query string, args map[string]any, err error) {
+	if !debug {
+		return
+	}
+	log.Printf("sql %s\n: query: %q\nargs: %v\nerror: %v\n", name, query, args, err)
+}
+
 // DB provides a wrapper around the sql.DB connection for application-specific database operations.
 type DB struct {
 	*sqlx.DB
@@ -105,7 +115,6 @@ type Invoice struct {
 	CRMSTotal     float64   `db:"crms_total"`
 	IsReconciled  bool      `db:"is_reconciled"`
 	RowCount      int       `db:"row_count"`
-	// UpdatedDateUTC string     `db:"UpdatedDateUTC"`
 	// Reference      string     `db:"Reference,omitempty"`
 	// AmountPaid     float64    `json:"AmountPaid"`
 }
@@ -146,6 +155,7 @@ func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, date
 	// Use sqlx to scan results into the provided slice.
 	var invoices []Invoice
 	err := stmt.SelectContext(ctx, &invoices, namedArgs)
+	logQuery("invoices", stmt.QueryString, namedArgs, err)
 	if err != nil {
 		return nil, fmt.Errorf("invoices select error: %v", err)
 	}
@@ -170,9 +180,6 @@ type BankTransaction struct {
 	CRMSTotal     float64   `db:"crms_total"`
 	IsReconciled  bool      `db:"is_reconciled"`
 	RowCount      int       `db:"row_count"`
-	// UpdatedDateUTC string     `db:"UpdatedDateUTC"`
-	// Status         string     `db:"Status"`
-	// Reference      string     `db:"Reference,omitempty"`
 	// AmountPaid     float64    `json:"AmountPaid"`
 }
 
@@ -211,6 +218,7 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 	// Use sqlx to scan results into the provided slice.
 	var transactions []BankTransaction
 	err := stmt.SelectContext(ctx, &transactions, namedArgs)
+	logQuery("bank transactions", stmt.QueryString, namedArgs, err)
 	if err != nil {
 		return nil, fmt.Errorf("bank transactions select error: %v", err)
 	}
@@ -275,6 +283,7 @@ func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, link
 	// Use sqlx to scan results into the provided slice.
 	var donations []Donation
 	err := stmt.SelectContext(ctx, &donations, namedArgs)
+	logQuery("donations", stmt.QueryString, namedArgs, err)
 	if err != nil {
 		return nil, fmt.Errorf("donations select error: %v", err)
 	}
@@ -347,6 +356,7 @@ func (db *DB) GetInvoiceWR(ctx context.Context, invoiceID string) (WRInvoice, []
 	// Use sqlx to scan results into the provided slice.
 	var iwli invoicesWLI
 	err := stmt.SelectContext(ctx, &iwli, namedArgs)
+	logQuery("invoiceWLI", stmt.QueryString, namedArgs, err)
 	if err != nil {
 		return invoice, nil, fmt.Errorf("invoice select error: %v", err)
 	}
@@ -377,7 +387,7 @@ type WRTransaction struct {
 	Total         float64   `db:"total"`
 	DonationTotal float64   `db:"donation_total"`
 	CRMSTotal     float64   `db:"crms_total"`
-	IsReconciled  *bool     `db:"is_reconciled"`
+	IsReconciled  bool      `db:"is_reconciled"`
 }
 
 // GetTransactionWR (a wide rows query) retrieves a single invoice from
@@ -414,6 +424,7 @@ func (db *DB) GetTransactionWR(ctx context.Context, transactionID string) (WRTra
 	// Use sqlx to scan results into the provided slice.
 	var twli transactionsWLI
 	err := stmt.SelectContext(ctx, &twli, namedArgs)
+	logQuery("transactionWLI", stmt.QueryString, namedArgs, err)
 	if err != nil {
 		return transaction, nil, fmt.Errorf("transaction select error: %v", err)
 	}

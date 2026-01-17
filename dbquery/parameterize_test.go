@@ -82,11 +82,14 @@ WITH variables AS (
 }
 
 func TestParameterizeFile(t *testing.T) {
-	_, err := ParameterizeFile("sql/invoices.sql")
+
+	sqlDir := os.DirFS("sql")
+
+	_, err := ParameterizeFile(sqlDir, "invoices.sql")
 	if err != nil {
 		t.Fatalf("unexpected file parameterization error: %v", err)
 	}
-	_, err = ParameterizeFile("sql/doesNotExist")
+	_, err = ParameterizeFile(sqlDir, "doesNotExist")
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("expected file parameterization error")
 	}

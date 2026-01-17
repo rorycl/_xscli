@@ -27,7 +27,9 @@ func TestInvoicesQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", "./sql", accountCodes)
+	sqlDir := os.DirFS("sql")
+
+	db, err := New("testdata/test.db", sqlDir, accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -221,7 +223,9 @@ func TestBankTransactionsQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", "./sql", accountCodes)
+	sqlDir := os.DirFS("sql")
+
+	db, err := New("testdata/test.db", sqlDir, accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -254,6 +258,7 @@ func TestBankTransactionsQuery(t *testing.T) {
 				Reference:     "STRIPE-PAYOUT-2025-05-04",
 				Date:          time.Date(2025, time.May, 4, 9, 0, 0, 0, time.UTC),
 				ContactName:   "Stripe",
+				Status:        "RECONCILED",
 				Total:         332.5,
 				DonationTotal: 340,
 				CRMSTotal:     0,
@@ -275,6 +280,7 @@ func TestBankTransactionsQuery(t *testing.T) {
 				Reference:     "JG-PAYOUT-2025-04-15",
 				Date:          time.Date(2025, time.April, 15, 14, 0, 0, 0, time.UTC),
 				ContactName:   "JustGiving",
+				Status:        "RECONCILED",
 				Total:         337.25,
 				DonationTotal: 355.0,
 				CRMSTotal:     355.0,
@@ -296,6 +302,7 @@ func TestBankTransactionsQuery(t *testing.T) {
 				Reference:     "STRIPE-PAYOUT-2025-05-04",
 				Date:          time.Date(2025, time.May, 4, 9, 0, 0, 0, time.UTC),
 				ContactName:   "Stripe",
+				Status:        "RECONCILED",
 				Total:         332.5,
 				DonationTotal: 340,
 				CRMSTotal:     0,
@@ -317,6 +324,7 @@ func TestBankTransactionsQuery(t *testing.T) {
 				Reference:     "STRIPE-PAYOUT-2025-05-04",
 				Date:          time.Date(2025, time.May, 4, 9, 0, 0, 0, time.UTC),
 				ContactName:   "Stripe",
+				Status:        "RECONCILED",
 				Total:         332.5,
 				DonationTotal: 340,
 				CRMSTotal:     0,
@@ -349,6 +357,7 @@ func TestBankTransactionsQuery(t *testing.T) {
 				Reference:     "ENTHUSE-PAYOUT-2025-04-28",
 				Date:          time.Date(2025, time.April, 28, 10, 0, 0, 0, time.UTC),
 				ContactName:   "Enthuse",
+				Status:        "RECONCILED",
 				Total:         112,
 				DonationTotal: 115,
 				CRMSTotal:     0,
@@ -387,7 +396,9 @@ func TestDonationsQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", "./sql", accountCodes)
+	sqlDir := os.DirFS("sql")
+
+	db, err := New("testdata/test.db", sqlDir, accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -615,7 +626,9 @@ func TestInvoiceWithLineItemsQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", "./sql", accountCodes)
+	sqlDir := os.DirFS("sql")
+
+	db, err := New("testdata/test.db", sqlDir, accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -630,17 +643,18 @@ func TestInvoiceWithLineItemsQuery(t *testing.T) {
 			invoiceID: "inv-002",
 			err:       nil,
 			invoice: WRInvoice{
-				ID:            "inv-002",
-				InvoiceNumber: "INV-2025-102",
-				Date:          time.Date(2025, 4, 12, 11, 0, 0, 0, time.UTC),
-				Type:          nil,
-				Status:        "PAID",
-				Reference:     nil,
-				ContactName:   "Generous Individual",
-				Total:         196.5,
-				DonationTotal: 200,
-				CRMSTotal:     200,
-				IsReconciled:  ptrBool(true),
+				ID:               "inv-002",
+				InvoiceNumber:    "INV-2025-102",
+				Date:             time.Date(2025, 4, 12, 11, 0, 0, 0, time.UTC),
+				Type:             nil,
+				Status:           "PAID",
+				Reference:        nil,
+				ContactName:      "Generous Individual",
+				Total:            196.5,
+				DonationTotal:    200,
+				CRMSTotal:        200,
+				TotalOutstanding: -3.5,
+				IsReconciled:     true,
 			},
 			lineItems: []WRLineItem{
 				WRLineItem{
@@ -663,17 +677,18 @@ func TestInvoiceWithLineItemsQuery(t *testing.T) {
 			invoiceID: "inv-unrec-04",
 			err:       nil,
 			invoice: WRInvoice{
-				ID:            "inv-unrec-04",
-				InvoiceNumber: "INV-2025-106",
-				Date:          time.Date(2025, 4, 25, 13, 0, 0, 0, time.UTC),
-				Type:          nil,
-				Status:        "PAID",
-				Reference:     nil,
-				ContactName:   "Small Pledge",
-				Total:         50,
-				DonationTotal: 50,
-				CRMSTotal:     0,
-				IsReconciled:  ptrBool(false),
+				ID:               "inv-unrec-04",
+				InvoiceNumber:    "INV-2025-106",
+				Date:             time.Date(2025, 4, 25, 13, 0, 0, 0, time.UTC),
+				Type:             nil,
+				Status:           "PAID",
+				Reference:        nil,
+				ContactName:      "Small Pledge",
+				Total:            50,
+				DonationTotal:    50,
+				CRMSTotal:        0,
+				TotalOutstanding: 50,
+				IsReconciled:     false,
 			},
 			lineItems: []WRLineItem{
 				{
@@ -717,7 +732,9 @@ func TestBankTransactionsWithLineItemsQuery(t *testing.T) {
 	accountCodes := "^(53|55|57)"
 	ctx := context.Background()
 
-	db, err := New("testdata/test.db", "./sql", accountCodes)
+	sqlDir := os.DirFS("sql")
+
+	db, err := New("testdata/test.db", sqlDir, accountCodes)
 	if err != nil {
 		t.Fatalf("db opening error: %v", err)
 	}
@@ -741,7 +758,7 @@ func TestBankTransactionsWithLineItemsQuery(t *testing.T) {
 				Total:         190,
 				DonationTotal: 200,
 				CRMSTotal:     200,
-				IsReconciled:  ptrBool(true),
+				IsReconciled:  true,
 			},
 			lineItems: []WRLineItem{
 				{
