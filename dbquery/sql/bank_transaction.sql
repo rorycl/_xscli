@@ -21,6 +21,7 @@ SELECT
      ELSE
         0
      END AS is_reconciled
+    ,donation_total - crms_total AS total_outstanding
 FROM (
     SELECT
         b.id

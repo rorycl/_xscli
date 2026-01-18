@@ -378,16 +378,17 @@ func (db *DB) GetInvoiceWR(ctx context.Context, invoiceID string) (WRInvoice, []
 // WRTransaction is the bank transaction component of a wide rows bank
 // transaction with line items query.
 type WRTransaction struct {
-	ID            string    `db:"id"`
-	Reference     *string   `db:"reference"`
-	Date          time.Time `db:"date"`
-	Type          *string   `db:"type"`
-	Status        string    `db:"status"`
-	ContactName   string    `db:"contact_name"`
-	Total         float64   `db:"total"`
-	DonationTotal float64   `db:"donation_total"`
-	CRMSTotal     float64   `db:"crms_total"`
-	IsReconciled  bool      `db:"is_reconciled"`
+	ID               string    `db:"id"`
+	Reference        *string   `db:"reference"`
+	Date             time.Time `db:"date"`
+	Type             *string   `db:"type"`
+	Status           string    `db:"status"`
+	ContactName      string    `db:"contact_name"`
+	Total            float64   `db:"total"`
+	DonationTotal    float64   `db:"donation_total"`
+	CRMSTotal        float64   `db:"crms_total"`
+	TotalOutstanding float64   `db:"total_outstanding"`
+	IsReconciled     bool      `db:"is_reconciled"`
 }
 
 // GetTransactionWR (a wide rows query) retrieves a single invoice from
