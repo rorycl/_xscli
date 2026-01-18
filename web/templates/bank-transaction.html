@@ -1,0 +1,115 @@
+{{- /* bank-transaction.html is the bank-transaction detail page template */ -}}
+
+{{ template "base.html" . }}
+
+{{ define "title" }}{{ .PageTitle }} - Charity Reconciler{{ end }}
+
+{{ define "nav" }}
+<div class="flex items-center space-x-4 text-sm font-medium">
+    <a href="/home" class="text-slate-500 border-b-2 border-transparent pb-1 hover:text-sky-700">Home</a>
+    <a href="/refresh" class="text-slate-500 border-b-2 border-transparent pb-1 hover:text-sky-700">Refresh</a>
+    <a href="/connect" class="text-slate-500 border-b-2 border-transparent pb-1 hover:text-sky-700">Logout</a>
+</div>
+{{ end }}
+
+{{ define "content" }}
+<!-- Bank Transaction Header Panel -->
+<div class="bg-white p-6 rounded-lg shadow-sm border border-slate-300 text-sm text-slate-800">
+
+    <!-- breadcrumb and bank transaction -->
+    <h3 class="text-l text-slate-800 font-semibold pb-3 pt-0">
+        <a href="/bank-transactions" class="hover:underline">Bank Transactions</a> &raquo; Details for bank transaction {{ .Transaction.Reference }}
+    </h3>
+    
+    <!-- bank-transaction panel -->
+    <div class="overflow-x-auto text-sm text-black rounded-md border border-slate-400 pt-4 px-4 mb-4 bg-slate-100">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-2 mb-4 mx-1">
+            <div class="md:col-span-2">
+                <h3 class="text-xs text-slate-800 font-semibold">Number</h3>
+                <p class="pb-2 border-b-2 border-dotted border-slate-400"><span class="pr-2">{{ .Transaction.Reference }}</span>
+                    <a href="#" class="text-xs text-sky-700 font-semibold hover:underline">view in Xero</a>
+                </p>
+            </div>
+            <div>
+                <h3 class="text-xs text-slate-800 font-semibold">Date</h3>
+                <p class="pb-2 border-b-2 border-dotted border-slate-400">{{ .Transaction.Date.Format "02 Jan 2006" }}</p>
+            </div>
+            <div class="md:col-span-2">
+                <h3 class="text-xs text-slate-800 font-semibold">Status</h3>
+                <p class="pb-2 border-b-2 border-dotted border-slate-400">{{ .Transaction.Status }}</p>
+            </div>
+            <!-- second row -->
+            <div class="md:col-span-2">
+                <h3 class="text-xs text-slate-800 font-semibold">To</h3>
+                <p>{{ .Transaction.ContactName }}</p>
+            </div>
+            <div>
+                <h3 class="text-xs text-slate-800 font-semibold">Transaction Total</h3>
+                <p class="text-base font-mono font-bold">{{ printf "£%.2f" .Transaction.Total }}</p>
+            </div>
+            <div>
+                <h3 class="text-xs text-slate-800 font-semibold">Transaction Donations Total</h3>
+                <p class="text-base font-mono font-bold">{{ printf "£%.2f" .Transaction.DonationTotal }}</p>
+            </div>
+            <div>
+                <h3 class="text-xs text-slate-800 font-semibold">Salesforce Donations Total</h3>
+                <p class="text-base font-mono font-bold">{{ printf "£%.2f" .Transaction.CRMSTotal }}</p>
+            </div>
+        </div>
+
+        <div class="border-2 border-slate-300 mb-3"> 
+        <table class="min-w-full divide-y divide-slate-300 text-xs text-slate-800 ">
+            <thead class="bg-indigo-100">
+                <tr>
+                    <th class="text-slate-800 px-4 py-2 text-left font-semibold">Account Name</th>
+                    <th class="text-slate-800 px-4 py-2 text-left font-semibold">Description</th>
+                    <th class="text-slate-800 px-4 py-2 text-right font-semibold">Tax Amount</th>
+                    <th class="text-slate-800 px-4 py-2 text-right font-semibold">Amount</th>
+                    <th class="text-slate-800 px-4 py-2 text-right font-semibold">Donation</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-300">
+                {{ range .LineItems }}
+                <tr class="hover:bg-slate-100">
+                    <td class="px-4 py-1 whitespace-nowrap">{{ .AccountName }}</td>
+                    <td class="px-4 py-1 max-w-xs truncate">{{ .Description }}</td>
+                    <td class="px-4 py-1 text-right font-mono">{{ .TaxAmount }}</td>
+                    <td class="px-4 py-1 text-right font-mono">{{ printf "%.2f" .LineAmount }}</td>
+                    <td class="px-4 py-1 text-right font-mono">{{ printf "%.2f" .DonationAmount }}</td>
+                </tr>
+                {{ end }}
+                <tr class="bg-slate-100 font-semibold">
+                    <td colspan="3" class="px-4 py-1 text-right">Total</td>
+                    <td class="px-4 py-1 text-right font-mono">{{ printf "£%.2f" .Transaction.Total }}</td>
+                    <td class="px-4 py-1 text-right font-mono">{{ printf "£%.2f" .Transaction.DonationTotal }}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+
+        <p class="text font-mono font-semibold my-2">
+        Linked donations total: {{ printf "£%.2f" .Transaction.CRMSTotal }}
+        <span class="font-semibold uppercase {{ if .Transaction.IsReconciled }}text-green-600{{ else }}text-red-600{{ end }}">
+            {{ if .Transaction.IsReconciled }}Reconciled{{ else }}Out by {{ printf "£%.2f" .Transaction.TotalOutstanding }}{{ end }}
+        </span>
+        </p>
+    </div>
+    <!-- end of bank-transaction section -->
+
+<!-- donations zone wrapper -->
+<div id="donations-zone" class="mt-6">
+
+    {{ template "partial-donations-tabs" . }}
+
+    <div id="tab-content"
+         class="relative overflow-x-auto text-black border border-slate-400 rounded-md rounded-tr-lg rounded-b-md rounded-tl-none"
+         hx-get="/partials/donations-linked/bank-transaction/{{ .Transaction.Reference }}"
+         hx-trigger="load"
+         hx-target="#donations-zone"                                           
+         hx-swap="innerHTML">
+        <!-- Loading spinner could go here -->
+        <p class="p-4">Loading linked donations...</p>
+    </div>
+</div>
+<!-- end of donations zone wrapper -->
+{{ end }}
