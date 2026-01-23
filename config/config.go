@@ -25,10 +25,12 @@ type Config struct {
 
 // WebConfig holds settings specific to the web server.
 type WebConfig struct {
-	TemplatesPath string `yaml:"templates_path"`
-	StaticPath    string `yaml:"static_path"`
-	ListenAddress string `yaml:"listen_address"`
-	DevMode       bool   `yaml:"dev_mode"`
+	TemplatesPath      string `yaml:"templates_path"`
+	StaticPath         string `yaml:"static_path"`
+	ListenAddress      string `yaml:"listen_address"`
+	XeroCallBack       string `yaml:"xero_callback"`
+	SalesforceCallBack string `yaml:"salesforce_callback"`
+	DevMode            bool   `yaml:"dev_mode"`
 }
 
 // XeroConfig holds Xero-specific settings.
@@ -103,6 +105,12 @@ func validateAndPrepare(c *Config) error {
 	}
 	if c.Web.ListenAddress == "" {
 		return errors.New("web.listen_address is missing")
+	}
+	if c.Web.XeroCallBack == "" {
+		return errors.New("web.xero_callback is missing")
+	}
+	if c.Web.SalesforceCallBack == "" {
+		return errors.New("web.salesforce_callback is missing")
 	}
 
 	// Xero

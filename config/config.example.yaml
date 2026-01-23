@@ -13,6 +13,8 @@ web:
   templates_path: "./web/templates"
   static_path: "./web/static"
   listen_address: "127.0.0.1:8080"
+  xero_callback: "/callback/xero"
+  salesforce_callback: "/callback/salesforce"
   dev_mode: true
 
 ################################################################
