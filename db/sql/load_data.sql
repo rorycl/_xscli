@@ -120,7 +120,7 @@ INSERT INTO "bank_transaction_line_items" (id, transaction_id, description, line
 ('bt-li-001b', 'bt-001', 'JustGiving Payout - Spring Campaign', 155.00, '5701'),
 ('bt-li-001c', 'bt-001', 'JustGiving Platform Fee', -17.75, '429');
 
-INSERT INTO "salesforce_opportunities" (id, name, amount, close_date, payout_reference_dfk) VALUES
+INSERT INTO "donations" (id, name, amount, close_date, payout_reference_dfk) VALUES
 ('sf-opp-003', 'Anonymous Donor', 20.00, datetime('2025-04-13'), 'JG-PAYOUT-2025-04-15'),
 ('sf-opp-004', 'Anonymous Donor', 20.00, datetime('2025-04-13'), 'JG-PAYOUT-2025-04-15'),
 ('sf-opp-005', 'Jane Smith', 100.00, datetime('2025-04-14'), 'JG-PAYOUT-2025-04-15'),

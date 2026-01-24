@@ -32,7 +32,7 @@ INSERT INTO accounts (
     ,system_account
     ,currency_code
     ,updated_at
-	)
+)
 SELECT
     v.AccountID    
     ,v.Code         
@@ -50,8 +50,7 @@ FROM
 WHERE
     true
 ON CONFLICT (id) DO UPDATE SET
-   id              = excluded.id
-   ,code           = excluded.code
+    code           = excluded.code
    ,name           = excluded.name
    ,description    = excluded.description
    ,type           = excluded.type
