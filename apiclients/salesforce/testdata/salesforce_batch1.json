@@ -36,7 +36,7 @@
           "type": "User",
           "url": "/services/data/v65.0/sobjects/User/005gL00000BOwSkQAL"
         },
-        "Name": "Rory Campbell-Lange"
+        "Name": "Test User"
       }
     },
     {
@@ -72,7 +72,7 @@
           "type": "User",
           "url": "/services/data/v65.0/sobjects/User/005gL00000BOwSkQAL"
         },
-        "Name": "Rory Campbell-Lange"
+        "Name": "Test User"
       }
     }
   ]

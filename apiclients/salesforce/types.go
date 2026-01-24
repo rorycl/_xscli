@@ -18,6 +18,9 @@ type SalesforceTime struct {
 	time.Time
 }
 
+// FlattenedName flattens an obj.Name string to a string.
+type FlattenedName string
+
 // UnmarshalJSON implements the json.Unmarshaler interface.
 func (sd *SalesforceDate) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `"`)
@@ -47,6 +50,24 @@ func (st *SalesforceTime) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (fn *FlattenedName) UnmarshalJSON(data []byte) error {
+	// Handle the case of a JSON null value.
+	if string(data) == "null" {
+		*fn = ""
+		return nil
+	}
+	// Use a helper struct to extract the 'Name' field from the object.
+	var helper struct {
+		Name string `json:"Name"`
+	}
+	if err := json.Unmarshal(data, &helper); err != nil {
+		return err
+	}
+	*fn = FlattenedName(helper.Name)
+	return nil
+}
+
 // SOQLResponse is the top-level envelope for a SOQL query response.
 type SOQLResponse struct {
 	TotalSize      int      `json:"totalSize"`
@@ -63,13 +84,9 @@ type CoreFields struct {
 	CloseDate        SalesforceDate `json:"CloseDate"`
 	CreatedDate      SalesforceTime `json:"CreatedDate"`
 	LastModifiedDate SalesforceTime `json:"LastModifiedDate"`
-	CreatedBy        struct {
-		Name string `json:"Name"`
-	} `json:"CreatedBy"`
-	LastModifiedBy struct {
-		Name string `json:"Name"`
-	} `json:"LastModifiedBy"`
-	PayoutReference *string `json:"Payout_Reference__c"` // Pointer to handle null values
+	CreatedBy        FlattenedName  `json:"CreatedBy"`
+	LastModifiedBy   FlattenedName  `json:"LastModifiedBy"`
+	PayoutReference  *string        `json:"Payout_Reference__c"` // Pointer to handle null values
 }
 
 // Record represents the data for a single Salesforce record, combining
@@ -135,54 +152,55 @@ func (su *SOQLUnmarshaller) UnmarshalSOQLResponse(data []byte) (*SOQLResponse, e
 // Record.AdditionalFields.
 func (su *SOQLUnmarshaller) unmarshalAndMapRecord(data []byte) (Record, error) {
 	var record Record
-	var allFields map[string]any
 
-	if err := json.Unmarshal(data, &allFields); err != nil {
-		return record, err
-	}
-
-	// Unmarshal the corefields.
 	if err := json.Unmarshal(data, &record.CoreFields); err != nil {
-		return record, err
+		return record, fmt.Errorf("failed to unmarshal core fields: %v", err)
 	}
 
-	// Unmarshal the selected additional fields. The provided map uses
-	// Key.Subkey format for specifying second-level fields such as
-	// Account.Name, otherwise the fields are expected to be at the top
-	// level.
-	//
-	// All data from the SOQL query is reported as follows:
-	// * CoreFields are recorded in only those fields
-	// * Mapper field names are renamed in AdditionalFields
-	// * Any other fields are stored in AdditionalFields
+	var allFields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &allFields); err != nil {
+		return record, fmt.Errorf("failed to unmarshal into generic map: %v", err)
+	}
+
+	// Delete core fields and unneeded fields from allFields. Retain the top-level
+	// "attributes" for reference if needed.
+	delete(allFields, "Id")
+	delete(allFields, "Name")
+	delete(allFields, "Amount")
+	delete(allFields, "CloseDate")
+	delete(allFields, "LastModifiedDate")
+	delete(allFields, "Payout_Reference__c")
+	delete(allFields, "CreatedDate")
+	delete(allFields, "CreatedBy")
+	delete(allFields, "ModifiedBy")
+	delete(allFields, "LastModifiedBy")
+
 	record.AdditionalFields = make(map[string]any)
-	for k, v := range allFields {
-		switch k {
-		// Skip CoreFields by field name, other than for CreatedBy and LastModifiedBy
-		case "ID", "Name", "Amount", "CloseDate", "CreatedDate", "LastModifiedDate",
-			"PayoutReference":
-		// Skip CoreFields by struct tag and not specified above.
-		case "Id":
-		// If in mapper, save under new field name in AdditionalFields
-		// else save in AdditionalFields.
-		default:
-			// Determine if v is a map, if so recurse one level and make a compound key
-			// such as "LastModifiedBy.Name".
-			if subMap, ok := v.(map[string]any); ok {
-				for kk, sm := range subMap {
-					newKey := strings.Join([]string{enTitle(k), enTitle(kk)}, ".")
-					if replacementKey, ok := su.Mapper[newKey]; ok {
-						newKey = replacementKey
-					}
-					record.AdditionalFields[newKey] = sm
+	for key, rawValue := range allFields {
+		var subMap map[string]json.RawMessage
+		// Determine if v is a map, if so recurse one level and make a compound key
+		// such as "LastModifiedBy.Name".
+		if err := json.Unmarshal(rawValue, &subMap); err == nil {
+			for subKey, subValue := range subMap {
+				if subKey == "attributes" {
+					continue
 				}
-			} else {
-				newKey := enTitle(k)
+				newKey := strings.Join([]string{enTitle(key), enTitle(subKey)}, ".")
 				if replacementKey, ok := su.Mapper[newKey]; ok {
 					newKey = replacementKey
 				}
+				var v any
+				_ = json.Unmarshal(subValue, &v)
 				record.AdditionalFields[newKey] = v
 			}
+		} else {
+			newKey := enTitle(key)
+			if replacementKey, ok := su.Mapper[newKey]; ok {
+				newKey = replacementKey
+			}
+			var v any
+			_ = json.Unmarshal(rawValue, &v)
+			record.AdditionalFields[newKey] = v
 		}
 	}
 
