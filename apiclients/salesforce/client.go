@@ -14,6 +14,10 @@ import (
 	"reconciler/config"
 )
 
+// maxBatchUpdateCount is the maximum number of Salesforce records that
+// can be updated in one operation.
+const maxBatchUpdateCount = 200
+
 // Client is a wrapper for making authenticated calls to the Salesforce API.
 type Client struct {
 	httpClient  *http.Client
@@ -74,25 +78,29 @@ func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince
 	return records, nil
 }
 
-// BatchUpdateOpportunityRefs performs a update using the Salesforce
-// sObject Collections API (which is a synchronous API) for up to 200
-// records at a time. See
+// BatchUpdateOpportunityRefs performs a update using the Salesforce sObject Collections
+// API (which is a synchronous API) for up to 200 records at a time. See
 // https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_describe.htm.
 //
-// The method replaces the data in the stated salesforce LinkingFieldName for salesforce opportunity
-// records with the provided IDs with `reference`.
+// The method replaces the data in the stated salesforce LinkingFieldName for salesforce
+// opportunity records with the provided IDs with `reference`.
 //
-// Note that setting `allOrNone` to true makes the SOQL update atomic and the transaction will fail
-// in it's entirety if any single opportunity record cannot be updated.
-// See
+// Note that setting `allOrNone` to true makes the SOQL update atomic and the
+// transaction will fail in it's entirety if any single opportunity record cannot be
+// updated. See
 // https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_allornone.htm
-// for more information about "allOrNone Parameters in Composite and Collections Requests".
-func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference string, ids []string, allOrNone bool) error {
+// for more information about "allOrNone Parameters in Composite and Collections
+// Requests".
+func (c *Client) BatchUpdateOpportunityRefs(
+	ctx context.Context,
+	reference string,
+	ids []string,
+	allOrNone bool) (CollectionsUpdateResponse, error) {
 
 	urlTpl := "%s/services/data/%s/composite/sobjects"
 
-	if len(ids) > 200 {
-		return fmt.Errorf("cannot update more than 200 records in a single batch")
+	if len(ids) > maxBatchUpdateCount {
+		return nil, fmt.Errorf("cannot update more than 200 records in a single batch")
 	}
 
 	// Build a slice of records.
@@ -101,7 +109,9 @@ func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference strin
 		recordsForUpdate[i] = map[string]any{
 			"id":                                 id,
 			c.config.Salesforce.LinkingFieldName: reference,
-			"attributes":                         map[string]string{"type": c.config.Salesforce.LinkingObject},
+			"attributes": map[string]string{
+				"type": c.config.Salesforce.LinkingObject,
+			},
 		}
 	}
 
@@ -113,20 +123,18 @@ func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference strin
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal batch request: %w", err)
+		return nil, fmt.Errorf("failed to marshal batch request: %w", err)
 	}
-	// Write the response to disk if desired.
-	// _ = os.WriteFile("batchRequest", body, 0644)
 
 	requestURL := fmt.Sprintf(urlTpl, c.instanceURL, c.apiVersion)
 	req, err := c.newRequest(ctx, "PATCH", requestURL, body)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("new patch request error: %w", err)
 	}
 
 	var response CollectionsUpdateResponse
 	if _, err := c.do(req, &response); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Check for errors within the response array.
@@ -144,11 +152,11 @@ func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference strin
 	}
 
 	if len(errorMessages) > 0 {
-		return fmt.Errorf("one or more records failed to update:\n- %s",
+		return response, fmt.Errorf("one or more records failed to update:\n- %s",
 			strings.Join(errorMessages, "\n- "))
 	}
 
-	return nil
+	return response, nil
 }
 
 // newRequest is a helper to create a new HTTP request with common headers.

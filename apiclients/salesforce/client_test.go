@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reconciler/config"
+	"strings"
 	"testing"
 	"time"
 )
@@ -209,7 +210,8 @@ func TestBatchUpdateOpportunityRefs_Succeed(t *testing.T) {
 	)
 
 	getBatchUpdate := func(client *Client) error {
-		return client.BatchUpdateOpportunityRefs(ctx, "ref-abc", []string{"a", "b", "c"}, allOrNone)
+		_, err := client.BatchUpdateOpportunityRefs(ctx, "ref-abc", []string{"a", "b", "c"}, allOrNone)
+		return err
 	}
 
 	err := testPatch(
@@ -234,18 +236,31 @@ func TestBatchUpdateOpportunityRefs_Fail(t *testing.T) {
 		errorID   string          = "b"
 	)
 
-	getBatchUpdate := func(client *Client) error {
-		return client.BatchUpdateOpportunityRefs(ctx, "ref-abc", []string{"a", "b", "c"}, allOrNone)
+	var capturedResponse CollectionsUpdateResponse
+	getBatchUpdateWithResponse := func(client *Client) error {
+		var err error
+		capturedResponse, err = client.BatchUpdateOpportunityRefs(ctx, "ref-abc", []string{"a", "b", "c"}, allOrNone)
+		return err
 	}
 
 	err := testPatch(
 		t,
 		"/services/data/%s/composite/sobjects", // endpoint template
 		errorID,                                // ID to error
-		getBatchUpdate,                         // the api function to call
+		getBatchUpdateWithResponse,             // the api function to call
 	)
 
 	if err == nil {
-		t.Fatal("testPatch should return an error")
+		t.Fatal("expected an error, but got nil")
 	}
+
+	expectedErrorSubString := "failed to update record b"
+	if got, want := err.Error(), expectedErrorSubString; !strings.Contains(got, want) {
+		t.Errorf("expected error string %q in %q", want, got)
+	}
+
+	if got, want := len(capturedResponse), 3; got != want {
+		t.Errorf("got %d records want %d", got, want)
+	}
+
 }
