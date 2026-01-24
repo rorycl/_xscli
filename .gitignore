@@ -13,6 +13,9 @@ sf_token.json
 web/playground/
 web/sql
 
+# db
+db/testdata/test.db-*
+
 # backups
 reconciliation.db.*
 
