@@ -8,11 +8,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
-	"sfcli/config"
+	"reconciler/config"
 )
 
 // Client is a wrapper for making authenticated calls to the Salesforce API.
@@ -20,7 +19,7 @@ type Client struct {
 	httpClient  *http.Client
 	instanceURL string
 	apiVersion  string
-	config      config.SalesforceConfig
+	config      config.Config
 }
 
 // GetOpportunities fetches records from Salesforce using a configurable SOQL query.
@@ -36,10 +35,10 @@ func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince
 	whereClause := strings.Join(conditions, " AND ")
 
 	// Replace the placeholder in the query template with the generated WHERE clause.
-	finalSOQL := strings.Replace(c.config.Query, "{{.WhereClause}}", whereClause, 1)
+	finalSOQL := strings.Replace(c.config.Salesforce.Query, "{{.WhereClause}}", whereClause, 1)
 
 	// Dump the final query for debugging purposes.
-	_ = os.WriteFile("salesforce_query.log", []byte(finalSOQL), 0644)
+	// _ = os.WriteFile("salesforce_query.log", []byte(finalSOQL), 0644)
 
 	// Salesforce sobject queries provide at most 2000 records in a batch. Subsequent
 	// query paths are represented by response.NextRecordsURL. If there are no more
@@ -77,9 +76,18 @@ func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince
 
 // BatchUpdateOpportunityRefs performs a update using the Salesforce
 // sObject Collections API (which is a synchronous API) for up to 200
-// records at a time.
-// See https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_describe.htm
-func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference string, ids []string) error {
+// records at a time. See
+// https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_describe.htm.
+//
+// The method replaces the data in the stated salesforce LinkingFieldName for salesforce opportunity
+// records with the provided IDs with `reference`.
+//
+// Note that setting `allOrNone` to true makes the SOQL update atomic and the transaction will fail
+// in it's entirety if any single opportunity record cannot be updated.
+// See
+// https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_allornone.htm
+// for more information about "allOrNone Parameters in Composite and Collections Requests".
+func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference string, ids []string, allOrNone bool) error {
 
 	urlTpl := "%s/services/data/%s/composite/sobjects"
 
@@ -91,15 +99,15 @@ func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference strin
 	recordsForUpdate := make([]map[string]any, len(ids))
 	for i, id := range ids {
 		recordsForUpdate[i] = map[string]any{
-			"id":                      id,
-			c.config.LinkingFieldName: reference,
-			"attributes":              map[string]string{"type": c.config.LinkingObject},
+			"id":                                 id,
+			c.config.Salesforce.LinkingFieldName: reference,
+			"attributes":                         map[string]string{"type": c.config.Salesforce.LinkingObject},
 		}
 	}
 
 	// Wrap records in the required request body structure.
 	payload := CollectionsUpdateRequest{
-		AllOrNone: true,
+		AllOrNone: allOrNone,
 		Records:   recordsForUpdate,
 	}
 
@@ -107,7 +115,8 @@ func (c *Client) BatchUpdateOpportunityRefs(ctx context.Context, reference strin
 	if err != nil {
 		return fmt.Errorf("failed to marshal batch request: %w", err)
 	}
-	_ = os.WriteFile("batchRequest", body, 0644)
+	// Write the response to disk if desired.
+	// _ = os.WriteFile("batchRequest", body, 0644)
 
 	requestURL := fmt.Sprintf(urlTpl, c.instanceURL, c.apiVersion)
 	req, err := c.newRequest(ctx, "PATCH", requestURL, body)
@@ -172,7 +181,8 @@ func (c *Client) do(req *http.Request, v any) (*http.Response, error) {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	_ = os.WriteFile("salesforce_response.json", body, 0644)
+	// Uncomment to save the raw response to disk for debugging.
+	// _ = os.WriteFile("salesforce_response.json", body, 0644)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
@@ -186,7 +196,7 @@ func (c *Client) do(req *http.Request, v any) (*http.Response, error) {
 			return resp, json.Unmarshal(body, v)
 		}
 		// unmarshal
-		unmarshaller := SOQLUnmarshaller{Mapper: c.config.FieldMappings}
+		unmarshaller := SOQLUnmarshaller{Mapper: c.config.Salesforce.FieldMappings}
 		data, err := unmarshaller.UnmarshalSOQLResponse(body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode response: %w", err)

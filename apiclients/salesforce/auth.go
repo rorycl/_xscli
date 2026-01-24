@@ -9,10 +9,14 @@ import (
 	"os"
 	"time"
 
-	"sfcli/config"
+	"reconciler/config"
 
 	"golang.org/x/oauth2"
 )
+
+// SalesforceAPIVersionNumber sets out the currently supported
+// Salesforce API used for this client.
+const SalesforceAPIVersionNumber = "v65.0"
 
 // tokenCache is a helper struct to reliably save and load the OAuth2 token
 // and the critical instance_url from a file.
@@ -22,10 +26,10 @@ type tokenCache struct {
 }
 
 // NewClient handles the OAuth2 flow to return an authenticated Salesforce client.
-func NewClient(ctx context.Context, cfg *config.RootConfig) (*Client, error) {
-	cache, err := loadTokenCacheFromFile(cfg.TokenFilePath)
+func NewClient(ctx context.Context, cfg *config.Config) (*Client, error) {
+	cache, err := loadTokenCacheFromFile(cfg.Salesforce.TokenFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("no token file found at '%s'. Please run the 'login' command first", cfg.TokenFilePath)
+		return nil, fmt.Errorf("no token file found at '%s'. Please run the 'login' command first", cfg.Salesforce.TokenFilePath)
 	}
 
 	tokenSource := cfg.Salesforce.OAuth2Config.TokenSource(ctx, cache.Token)
@@ -37,8 +41,8 @@ func NewClient(ctx context.Context, cfg *config.RootConfig) (*Client, error) {
 	if refreshedToken.AccessToken != cache.Token.AccessToken {
 		log.Println("Access token was refreshed. Saving new token.")
 		cache.Token = refreshedToken
-		// The instance_url does not change on refresh, so we can keep the old one.
-		if err := saveTokenCacheToFile(cache, cfg.TokenFilePath); err != nil {
+		// The instance_url does not change on refresh, so keep the old one.
+		if err := saveTokenCacheToFile(cache, cfg.Salesforce.TokenFilePath); err != nil {
 			return nil, fmt.Errorf("failed to save refreshed token: %w", err)
 		}
 	}
@@ -47,14 +51,15 @@ func NewClient(ctx context.Context, cfg *config.RootConfig) (*Client, error) {
 	return &Client{
 		httpClient:  oauthClient,
 		instanceURL: cache.InstanceURL,
-		apiVersion:  "v65.0",
-		config:      cfg.Salesforce,
+		apiVersion:  SalesforceAPIVersionNumber,
+		config:      *cfg,
 	}, nil
 }
 
-// InitiateLogin starts the interactive OAuth2 flow to get a new token from the web.
-// It saves the new token and instance URL to the specified path upon success.
-func InitiateLogin(ctx context.Context, cfg *oauth2.Config, tokenPath string) error {
+// InitiateLogin starts the interactive OAuth2 flow to get a new token
+// from the web. It saves the new token and instance URL to the
+// specified configuration path upon success.
+func InitiateLogin(ctx context.Context, cfg *config.Config) error {
 	tok, err := getNewTokenFromWeb(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to get new token: %w", err)
@@ -66,7 +71,7 @@ func InitiateLogin(ctx context.Context, cfg *oauth2.Config, tokenPath string) er
 	}
 
 	cache := &tokenCache{Token: tok, InstanceURL: instanceURL}
-	if err := saveTokenCacheToFile(cache, tokenPath); err != nil {
+	if err := saveTokenCacheToFile(cache, cfg.Salesforce.TokenFilePath); err != nil {
 		return fmt.Errorf("failed to save new token: %w", err)
 	}
 	log.Println("Login successful. Token saved.")
@@ -75,12 +80,12 @@ func InitiateLogin(ctx context.Context, cfg *oauth2.Config, tokenPath string) er
 
 // getNewTokenFromWeb starts a temporary web server to handle the OAuth2 callback.
 // It uses the PKCE extension for enhanced security.
-func getNewTokenFromWeb(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, error) {
+func getNewTokenFromWeb(ctx context.Context, cfg *config.Config) (*oauth2.Token, error) {
 	codeChan := make(chan string)
 	errChan := make(chan error)
-	server := &http.Server{Addr: ":8080"}
+	server := &http.Server{Addr: cfg.Web.ListenAddress}
 
-	http.HandleFunc("/sf-callback", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(cfg.Web.SalesforceCallBack, func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			errChan <- fmt.Errorf("did not receive authorization code in callback")
@@ -97,7 +102,7 @@ func getNewTokenFromWeb(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token,
 	}()
 
 	verifier := oauth2.GenerateVerifier()
-	authURL := cfg.AuthCodeURL("state-string", oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
+	authURL := cfg.Salesforce.OAuth2Config.AuthCodeURL("state-string", oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
 
 	fmt.Printf("\nPlease open this URL in your browser to authorize the application:\n%s\n\n", authURL)
 
@@ -115,7 +120,7 @@ func getNewTokenFromWeb(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token,
 		log.Printf("Failed to shut down server gracefully: %v", err)
 	}
 
-	tok, err := cfg.Exchange(ctx, authCode, oauth2.VerifierOption(verifier))
+	tok, err := cfg.Salesforce.OAuth2Config.Exchange(ctx, authCode, oauth2.VerifierOption(verifier))
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange authorization code for token: %w", err)
 	}
@@ -144,4 +149,12 @@ func saveTokenCacheToFile(cache *tokenCache, path string) error {
 	}
 	defer f.Close()
 	return json.NewEncoder(f).Encode(cache)
+}
+
+// DeleteToken removes the token file from disk.
+func DeleteToken(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
