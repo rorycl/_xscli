@@ -70,10 +70,10 @@ func (fn *FlattenedName) UnmarshalJSON(data []byte) error {
 
 // SOQLResponse is the top-level envelope for a SOQL query response.
 type SOQLResponse struct {
-	TotalSize      int      `json:"totalSize"`
-	Done           bool     `json:"done"`
-	NextRecordsURL string   `json:"nextRecordsUrl"`
-	Records        []Record `json:"records"`
+	TotalSize      int        `json:"totalSize"`
+	Done           bool       `json:"done"`
+	NextRecordsURL string     `json:"nextRecordsUrl"`
+	Donations      []Donation `json:"records"`
 }
 
 // CoreFields defines the essential, non-negotiable fields the application requires.
@@ -89,16 +89,16 @@ type CoreFields struct {
 	PayoutReference  *string        `json:"Payout_Reference__c"` // Pointer to handle null values
 }
 
-// Record represents the data for a single Salesforce record, combining
+// Donation represents the data for a single Salesforce donation, combining
 // core and additional fields.
-type Record struct {
+type Donation struct {
 	CoreFields
 	AdditionalFields map[string]any
 }
 
 // SOQLUnmarshaller is a configurable struct for managing the custom
 // unmarshalling of a SOQL response. The Mapper provides a map of
-// fields (other than CoreFields) to store in each Record's
+// fields (other than CoreFields) to store in each Donation's
 // AdditionalFields.
 type SOQLUnmarshaller struct {
 	Mapper map[string]string
@@ -133,33 +133,33 @@ func (su *SOQLUnmarshaller) UnmarshalSOQLResponse(data []byte) (*SOQLResponse, e
 		TotalSize:      rawResponse.TotalSize,
 		Done:           rawResponse.Done,
 		NextRecordsURL: rawResponse.NextRecordsURL,
-		Records:        make([]Record, 0, len(rawResponse.Records)),
+		Donations:      make([]Donation, 0, len(rawResponse.Records)),
 	}
 
-	// Process rawResponse records into finalResponse.Records.
+	// Process rawResponse records into finalResponse.Donations.
 	for _, rawRecord := range rawResponse.Records {
-		record, err := su.unmarshalAndMapRecord(rawRecord)
+		donation, err := su.unmarshalAndMapRecord(rawRecord)
 		if err != nil {
-			return nil, fmt.Errorf("failed to process record: %w", err)
+			return nil, fmt.Errorf("failed to process donation: %w", err)
 		}
-		finalResponse.Records = append(finalResponse.Records, record)
+		finalResponse.Donations = append(finalResponse.Donations, donation)
 	}
 
 	return finalResponse, nil
 }
 
-// unmarshalAndMapRecord marshals raw data into Record.CoreFields and
-// Record.AdditionalFields.
-func (su *SOQLUnmarshaller) unmarshalAndMapRecord(data []byte) (Record, error) {
-	var record Record
+// unmarshalAndMapRecord marshals raw data into Donation.CoreFields and
+// Donation.AdditionalFields.
+func (su *SOQLUnmarshaller) unmarshalAndMapRecord(data []byte) (Donation, error) {
+	var donation Donation
 
-	if err := json.Unmarshal(data, &record.CoreFields); err != nil {
-		return record, fmt.Errorf("failed to unmarshal core fields: %v", err)
+	if err := json.Unmarshal(data, &donation.CoreFields); err != nil {
+		return donation, fmt.Errorf("failed to unmarshal core fields: %v", err)
 	}
 
 	var allFields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &allFields); err != nil {
-		return record, fmt.Errorf("failed to unmarshal into generic map: %v", err)
+		return donation, fmt.Errorf("failed to unmarshal into generic map: %v", err)
 	}
 
 	// Delete core fields and unneeded fields from allFields. Retain the top-level
@@ -175,7 +175,7 @@ func (su *SOQLUnmarshaller) unmarshalAndMapRecord(data []byte) (Record, error) {
 	delete(allFields, "ModifiedBy")
 	delete(allFields, "LastModifiedBy")
 
-	record.AdditionalFields = make(map[string]any)
+	donation.AdditionalFields = make(map[string]any)
 	for key, rawValue := range allFields {
 		var subMap map[string]json.RawMessage
 		// Determine if v is a map, if so recurse one level and make a compound key
@@ -191,7 +191,7 @@ func (su *SOQLUnmarshaller) unmarshalAndMapRecord(data []byte) (Record, error) {
 				}
 				var v any
 				_ = json.Unmarshal(subValue, &v)
-				record.AdditionalFields[newKey] = v
+				donation.AdditionalFields[newKey] = v
 			}
 		} else {
 			newKey := enTitle(key)
@@ -200,21 +200,21 @@ func (su *SOQLUnmarshaller) unmarshalAndMapRecord(data []byte) (Record, error) {
 			}
 			var v any
 			_ = json.Unmarshal(rawValue, &v)
-			record.AdditionalFields[newKey] = v
+			donation.AdditionalFields[newKey] = v
 		}
 	}
 
-	// Check all anticipated mapper values exist in record.
+	// Check all anticipated mapper values exist in donation.
 	for k, v := range su.Mapper {
-		if _, ok := record.AdditionalFields[v]; !ok {
-			return record, &ErrUnmarshallFieldNotFoundError{
+		if _, ok := donation.AdditionalFields[v]; !ok {
+			return donation, &ErrUnmarshallFieldNotFoundError{
 				originalField: k,
 				newField:      v,
 			}
 		}
 	}
 
-	return record, nil
+	return donation, nil
 }
 
 // CollectionsUpdateRequest is the structure for the sObject Collections
@@ -228,7 +228,7 @@ type CollectionsUpdateRequest struct {
 // Collections API, which is a slice of SaveResult objects.
 type CollectionsUpdateResponse []SaveResult
 
-// SaveResult represents the outcome of a single record update within
+// SaveResult represents the outcome of a single donation update within
 // the batch.
 type SaveResult struct {
 	ID      string        `json:"id"`

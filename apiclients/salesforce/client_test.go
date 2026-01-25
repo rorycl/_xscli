@@ -118,10 +118,11 @@ func testPatch(
 		}
 
 		cur := CollectionsUpdateResponse(make([]SaveResult, len(payload.Records)))
+
 		for i, r := range payload.Records {
 			cur[i].ID = r["id"].(string)
 			if cur[i].ID != errorID {
-				// Simulate ok record.
+				// Simulate ok donation.
 				cur[i].Success = true
 				cur[i].Errors = []ErrorDetail{}
 			} else {
@@ -153,14 +154,14 @@ func testPatch(
 }
 
 // TestGetOpportunities_OneBatch tests the GetOpportunities client call
-// for a single batch of records.
+// for a single batch of donations.
 func TestGetOpportunities_OneBatch(t *testing.T) {
 
-	getOpportunitiesFunc := func(client *Client) ([]Record, error) {
+	getOpportunitiesFunc := func(client *Client) ([]Donation, error) {
 		return client.GetOpportunities(context.Background(), time.Now(), time.Time{})
 	}
 
-	records, err := testBatching(
+	donations, err := testBatching(
 		t,
 		"/services/data/%s/query",            // endpoint
 		[]string{"salesforce_response.json"}, // json files to serve
@@ -170,20 +171,20 @@ func TestGetOpportunities_OneBatch(t *testing.T) {
 		t.Fatalf("testBatching returned an unexpected error: %v", err)
 	}
 
-	if got, want := len(records), 34; got != want {
-		t.Errorf("expected %d records, got %d", want, got)
+	if got, want := len(donations), 34; got != want {
+		t.Errorf("expected %d donations, got %d", want, got)
 	}
 }
 
 // TestGetOpportunities_TwoBatch tests the GetOpportunities client call
-// for two batches of records.
+// for two batches of donations.
 func TestGetOpportunities_TwoBatch(t *testing.T) {
 
-	getOpportunitiesFunc := func(client *Client) ([]Record, error) {
+	getOpportunitiesFunc := func(client *Client) ([]Donation, error) {
 		return client.GetOpportunities(context.Background(), time.Now(), time.Time{})
 	}
 
-	records, err := testBatching(
+	donations, err := testBatching(
 		t,
 		"/services/data/%s/query", // endpoint
 		[]string{"salesforce_batch1.json", "salesforce_batch2.json"}, // json files to serve
@@ -193,13 +194,13 @@ func TestGetOpportunities_TwoBatch(t *testing.T) {
 		t.Fatalf("testBatching returned an unexpected error: %v", err)
 	}
 
-	if got, want := len(records), 3; got != want {
-		t.Errorf("expected %d records, got %d", want, got)
+	if got, want := len(donations), 3; got != want {
+		t.Errorf("expected %d donations, got %d", want, got)
 	}
 }
 
 // TestBatchUpdateOpportunityRefs_Succeed tests batch PATCH updates to
-// update opportunities.
+// update donations.
 func TestBatchUpdateOpportunityRefs_Succeed(t *testing.T) {
 
 	var (
@@ -226,7 +227,7 @@ func TestBatchUpdateOpportunityRefs_Succeed(t *testing.T) {
 }
 
 // TestBatchUpdateOpportunityRefs_Fail tests a partial batch PATCH
-// update failure to update opportunities.
+// update failure to update donations.
 func TestBatchUpdateOpportunityRefs_Fail(t *testing.T) {
 
 	var (
@@ -254,13 +255,13 @@ func TestBatchUpdateOpportunityRefs_Fail(t *testing.T) {
 		t.Fatal("expected an error, but got nil")
 	}
 
-	expectedErrorSubString := "failed to update record b"
+	expectedErrorSubString := "failed to update donation b"
 	if got, want := err.Error(), expectedErrorSubString; !strings.Contains(got, want) {
 		t.Errorf("expected error string %q in %q", want, got)
 	}
 
 	if got, want := len(capturedResponse), 3; got != want {
-		t.Errorf("got %d records want %d", got, want)
+		t.Errorf("got %d donations want %d", got, want)
 	}
 
 }

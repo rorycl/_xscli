@@ -27,7 +27,7 @@ type Client struct {
 }
 
 // GetOpportunities fetches records from Salesforce using a configurable SOQL query.
-func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince time.Time) ([]Record, error) {
+func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince time.Time) ([]Donation, error) {
 	var conditions []string
 	toDate := fromDate.AddDate(1, 0, 0) // One year from the start date
 	conditions = append(conditions, fmt.Sprintf("CloseDate >= %s", fromDate.Format("2006-01-02")))
@@ -52,7 +52,7 @@ func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince
 	//
 	// requestURL is the initial url.
 	requestURL := fmt.Sprintf("%s/services/data/%s/query?q=%s", c.instanceURL, c.apiVersion, url.QueryEscape(finalSOQL))
-	var records []Record
+	var records []Donation
 	var pageNo int
 	for {
 		pageNo++
@@ -65,7 +65,7 @@ func (c *Client) GetOpportunities(ctx context.Context, fromDate, ifModifiedSince
 		if _, err := c.do(req, &response); err != nil {
 			return nil, fmt.Errorf("soql do error pageNo %d: %w", pageNo, err)
 		}
-		records = append(records, response.Records...)
+		records = append(records, response.Donations...)
 		if response.Done || response.NextRecordsURL == "" {
 			break
 		}
@@ -104,9 +104,9 @@ func (c *Client) BatchUpdateOpportunityRefs(
 	}
 
 	// Build a slice of records.
-	recordsForUpdate := make([]map[string]any, len(ids))
+	donationsForUpdate := make([]map[string]any, len(ids))
 	for i, id := range ids {
-		recordsForUpdate[i] = map[string]any{
+		donationsForUpdate[i] = map[string]any{
 			"id":                                 id,
 			c.config.Salesforce.LinkingFieldName: reference,
 			"attributes": map[string]string{
@@ -118,7 +118,7 @@ func (c *Client) BatchUpdateOpportunityRefs(
 	// Wrap records in the required request body structure.
 	payload := CollectionsUpdateRequest{
 		AllOrNone: allOrNone,
-		Records:   recordsForUpdate,
+		Records:   donationsForUpdate,
 	}
 
 	body, err := json.Marshal(payload)
@@ -145,14 +145,14 @@ func (c *Client) BatchUpdateOpportunityRefs(
 			for _, e := range result.Errors {
 				errors = append(errors, fmt.Sprintf("%s (%s)", e.Message, e.ErrorCode))
 			}
-			msg := fmt.Sprintf("failed to update record %s: %s", result.ID,
+			msg := fmt.Sprintf("failed to update donation %s: %s", result.ID,
 				strings.Join(errors, ", "))
 			errorMessages = append(errorMessages, msg)
 		}
 	}
 
 	if len(errorMessages) > 0 {
-		return response, fmt.Errorf("one or more records failed to update:\n- %s",
+		return response, fmt.Errorf("one or more donations failed to update:\n- %s",
 			strings.Join(errorMessages, "\n- "))
 	}
 

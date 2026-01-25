@@ -26,11 +26,11 @@ func TestTypesOK(t *testing.T) {
 		t.Fatalf("UnmarshalSOQLResponse error: %v", err)
 	}
 
-	if got, want := len(sr.Records), 34; got != want {
+	if got, want := len(sr.Donations), 34; got != want {
 		t.Errorf("got %d records, want %d", got, want)
 	}
 
-	if sr.Records[0].AdditionalFields["Account"] == nil {
+	if sr.Donations[0].AdditionalFields["Account"] == nil {
 		t.Error("expected 'Account' field to be mapped, but it was nil")
 	}
 }
@@ -52,7 +52,7 @@ func TestTypesExtended(t *testing.T) {
 		t.Fatalf("UnmarshalSOQLResponse error: %v", err)
 	}
 
-	if got, want := len(sr.Records), 3; got != want {
+	if got, want := len(sr.Donations), 3; got != want {
 		t.Fatalf("got %d records, want %d", got, want)
 	}
 
@@ -60,7 +60,7 @@ func TestTypesExtended(t *testing.T) {
 		return &s
 	}
 
-	expectedThirdRecord := Record{
+	expectedThirdDonation := Donation{
 		CoreFields: CoreFields{
 			ID:               "006gL00000EsB99QAF",
 			Name:             "Express Logistics Standby Generator",
@@ -81,7 +81,7 @@ func TestTypesExtended(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(expectedThirdRecord, sr.Records[2]); diff != "" {
+	if diff := cmp.Diff(expectedThirdDonation, sr.Donations[2]); diff != "" {
 		t.Errorf("unexpected third record diff:\n%v", diff)
 	}
 }
