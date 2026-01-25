@@ -1,10 +1,7 @@
 package db
 
-// This functions.go registers a regexpFunc function as set out in the
-// package docs for modernc.org/sqlite.RegisterFunction and
-// modernc.org/sqlite.FunctionImpl.
-//
-// Note that a cached regexp might be worth implementing.
+// This regregexp.go registers a regexpFunc function as set out in the package docs for
+// modernc.org/sqlite.RegisterFunction and modernc.org/sqlite.FunctionImpl.
 
 import (
 	"database/sql/driver"

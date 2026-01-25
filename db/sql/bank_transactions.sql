@@ -40,7 +40,7 @@ crms_donation_totals AS (
     SELECT
         payout_reference_dfk
         ,SUM(amount) AS total_crms_amount
-    FROM salesforce_opportunities
+    FROM donations
     JOIN variables
     WHERE
         payout_reference_dfk IS NOT NULL

@@ -9,16 +9,16 @@
 
 WITH variables AS (
     SELECT
-        'sf-opp-003' AS ID
-        ,'Anonymous Donor' AS Name
-        ,'21.20' AS Amount
-        ,datetime('2025-04-14') AS CloseDate
-        ,'JG-PAYOUT-2025-04-15' AS PayoutReference
-        ,datetime('2025-04-01') AS CreatedDate
-        ,'User1' AS CreatedBy
-        ,datetime('2025-04-01') AS LastModifiedDate
-        ,'User1' AS LastModifiedBy
-        ,'' AS AdditionalFieldsJSON
+        'sf-opp-003'            AS ID                   /* @param */
+        ,'Anonymous Donor'      AS Name                 /* @param */
+        ,'21.20'                AS Amount               /* @param */
+        ,datetime('2025-04-14') AS CloseDate            /* @param */
+        ,'JG-PAYOUT-2025-04-15' AS PayoutReference      /* @param */
+        ,datetime('2025-04-01') AS CreatedDate          /* @param */
+        ,'User1'                AS CreatedBy            /* @param */
+        ,datetime('2025-04-01') AS LastModifiedDate     /* @param */
+        ,'User1'                AS LastModifiedBy       /* @param */
+        ,''                     AS AdditionalFieldsJSON /* @param */
 )
 INSERT INTO donations (
     id

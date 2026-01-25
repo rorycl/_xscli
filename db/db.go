@@ -1,19 +1,32 @@
+// Package db provides the database component of the reconciler project.
+//
+// Althought the current database backend is sqlite to allow for cross-platform desktop
+// use, the database is not considered a simple storage layer. Each query below is held
+// in an sql file held in the `sql` directory, which can be run on the sqlite command
+// line. (For some queries it is advisable to run the sql in a transaction, so that the
+// results can be rolled back.)
+//
+// The use of external, runnable sql files also as Go prepared statements is made
+// possible through a novel parameterization scheme, as set out in parameterize.go.
 package db
 
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log"
 	"time"
-	"xerocli/app/xero"
+
+	"reconciler/apiclients/salesforce"
+	"reconciler/apiclients/xero"
 
 	"github.com/jmoiron/sqlx" // helper library
 	_ "modernc.org/sqlite"    // pure go sqlite driver
 )
 
-// parameterizedStmt describes an sqlFile parsed into an sqlx NamedStmt expecting the
+// parameterizedStmt describes an sql file parsed into an sqlx NamedStmt expecting the
 // provided args.
 type parameterizedStmt struct {
 	sqlFile string
@@ -33,16 +46,6 @@ func (p *parameterizedStmt) verifyArgs(args map[string]any) error {
 		)
 	}
 	return nil
-}
-
-const debug = false
-
-// logQuery is for helping debug SQL issues.
-func logQuery(name, query string, args map[string]any, err error) {
-	if !debug {
-		return
-	}
-	log.Printf("sql %s\n: query: %q\nargs: %v\nerror: %v\n", name, query, args, err)
 }
 
 // DB provides a wrapper around the sql.DB connection for application-specific db operations.
@@ -90,7 +93,7 @@ func New(dbPath string, sqlDir fs.FS, accountCodes string) (*DB, error) {
 		accountCodes: accountCodes,
 	}
 
-	// Prepare all the statements.
+	// Prepare the statements.
 	//
 	// Accounts.
 	db.accountUpsertStmt, err = db.prepNamedStatement(sqlDir, "account_upsert.sql")
@@ -168,9 +171,62 @@ func (db *DB) prepNamedStatement(fileFS fs.FS, filePath string) (*parameterizedS
 	}
 	return &parameterizedStmt{
 		filePath,
-		pQuery,
 		query.Parameters,
+		pQuery,
 	}, nil
+}
+
+// InitSchema creates the necessary tables if they don't already exist. The schema file
+// can be run idempotently.
+func (db *DB) InitSchema(fileFS fs.FS, filePath string) error {
+
+	schema, err := fs.ReadFile(fileFS, filePath)
+	if err != nil {
+		return fmt.Errorf("could not read schema file at %q: %w", filePath, err)
+	}
+
+	_, err = db.ExecContext(context.Background(), string(schema))
+	if err != nil {
+		return fmt.Errorf("failed to execute schema initialization: %w", err)
+	}
+	return nil
+}
+
+// UpsertAccounts upserts Xero account records.
+func (db *DB) UpsertAccounts(ctx context.Context, accounts []xero.Account) error {
+	if len(accounts) == 0 {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op after commit.
+
+	stmt := db.accountUpsertStmt
+
+	for _, acc := range accounts {
+		namedArgs := map[string]any{
+			"AccountID":     acc.AccountID,
+			"Code":          acc.Code,
+			"Name":          acc.Name,
+			"Description":   acc.Description,
+			"Type":          acc.Type,
+			"TaxType":       acc.TaxType,
+			"Status":        acc.Status,
+			"SystemAccount": acc.SystemAccount,
+			"CurrencyCode":  acc.CurrencyCode,
+			"Updated":       acc.Updated.Format("2006-01-02T15:04:05Z"),
+		}
+		if err := stmt.verifyArgs(namedArgs); err != nil {
+			return err
+		}
+		_, err := stmt.ExecContext(ctx, namedArgs)
+		if err != nil {
+			return fmt.Errorf("failed to upsert account %s: %w", acc.AccountID, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // Invoice is the concrete type of each row returned by GetInvoices.
@@ -217,13 +273,13 @@ func (db *DB) GetInvoices(ctx context.Context, reconciliationStatus string, date
 		"HereOffset":           offset,
 	}
 	if err := stmt.verifyArgs(namedArgs); err != nil {
-		return nil
+		return nil, err
 	}
 
 	// Scan results into the provided slice.
 	var invoices []Invoice
 	err := stmt.SelectContext(ctx, &invoices, namedArgs)
-	logQuery("invoices", stmt.QueryString, namedArgs, err)
+	logQuery("invoices", stmt, namedArgs, err)
 	if err != nil {
 		return nil, fmt.Errorf("invoices select error: %v", err)
 	}
@@ -256,16 +312,17 @@ func (db *DB) UpsertInvoices(ctx context.Context, invoices []xero.Invoice) error
 		namedArgs := map[string]any{
 			"InvoiceID": inv.InvoiceID,
 		}
-		if err := stm.verifyArgs(namedArgs); err != nil {
-			return nil, err
+		if err := stmt.verifyArgs(namedArgs); err != nil {
+			return err
 		}
-		if err := stmt.ExecContext(ctx, namedArgs); err != nil {
+		_, err := stmt.ExecContext(ctx, namedArgs)
+		if err != nil {
 			return fmt.Errorf("failed to delete old line items for invoice %s: %w", inv.InvoiceID, err)
 		}
 
 		// Upsert the invoice record.
 		stmt = db.invoiceUpsertStmt
-		namedArgs := map[string]any{
+		namedArgs = map[string]any{
 			"InvoiceID":     inv.InvoiceID,
 			"Type":          inv.Type,
 			"Status":        inv.Status,
@@ -278,10 +335,11 @@ func (db *DB) UpsertInvoices(ctx context.Context, invoices []xero.Invoice) error
 			"ContactID":     inv.Contact.ContactID,
 			"ContactName":   inv.Contact.Name,
 		}
-		if err := stm.verifyArgs(namedArgs); err != nil {
-			return nil, err
+		if err := stmt.verifyArgs(namedArgs); err != nil {
+			return err
 		}
-		if err := stmt.ExecContext(ctx, namedArgs); err != nil {
+		_, err = stmt.ExecContext(ctx, namedArgs)
+		if err != nil {
 			return fmt.Errorf("failed to upsert invoice %s: %w", inv.InvoiceID, err)
 		}
 
@@ -298,10 +356,11 @@ func (db *DB) UpsertInvoices(ctx context.Context, invoices []xero.Invoice) error
 				"AccountCode": line.AccountCode,
 				"TaxAmount":   line.TaxAmount,
 			}
-			if err := stm.verifyArgs(namedArgs); err != nil {
-				return nil, err
+			if err := stmt.verifyArgs(namedArgs); err != nil {
+				return err
 			}
-			if err := stmt.ExecContext(ctx, namedArgs); err != nil {
+			_, err := stmt.ExecContext(ctx, namedArgs)
+			if err != nil {
 				return fmt.Errorf("failed to upsert line item %s invoice %s: %w", line.LineItemID, inv.InvoiceID, err)
 			}
 		}
@@ -331,8 +390,7 @@ type BankTransaction struct {
 func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus string, dateFrom, dateTo time.Time, search string, limit, offset int) ([]BankTransaction, error) {
 
 	// Set named statement and parameter list.
-	stmt := db.bankTransactionsGetStmt.namedStatement
-	params := db.bankTransactionsGetStmt.args
+	stmt := db.bankTransactionsGetStmt
 
 	// Determine reconciliation status.
 	switch reconciliationStatus {
@@ -354,15 +412,15 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 		"HereLimit":            limit,
 		"HereOffset":           offset,
 	}
-	if got, want := len(namedArgs), len(params); got != want {
-		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
+	if err := stmt.verifyArgs(namedArgs); err != nil {
+		return nil, err
 	}
 
 	// Use sqlx to scan results into the provided slice.
 	var transactions []BankTransaction
 	err := stmt.SelectContext(ctx, &transactions, namedArgs)
-	logQuery("bank transactions", stmt.QueryString, namedArgs, err)
 	if err != nil {
+		logQuery("bank transactions", stmt, namedArgs, err)
 		return nil, fmt.Errorf("bank transactions select error: %v", err)
 	}
 
@@ -371,6 +429,86 @@ func (db *DB) GetBankTransactions(ctx context.Context, reconciliationStatus stri
 		return nil, sql.ErrNoRows
 	}
 	return transactions, nil
+}
+
+// UpsertBankTransactions performs upserts for a slice of BankTransactions. It replaces
+// all line items for each Bank Transaction (transaction) in the set to ensure
+// consistency.
+func (db *DB) UpsertBankTransactions(ctx context.Context, transactions []xero.BankTransaction) error {
+	if len(transactions) == 0 {
+		return nil
+	}
+
+	// Start transaction.
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op after a commit.
+
+	for _, tr := range transactions {
+
+		// Delete any existing line items for this bank transaction.
+		stmt := db.bankTransactionLIDeleteStmt
+		namedArgs := map[string]any{
+			"BankTransactionID": tr.BankTransactionID,
+		}
+		if err := stmt.verifyArgs(namedArgs); err != nil {
+			return err
+		}
+		_, err := stmt.ExecContext(ctx, namedArgs)
+		if err != nil {
+			return fmt.Errorf("failed to delete old line items for transaction %s: %w", tr.BankTransactionID, err)
+		}
+
+		// Upsert the new bank transaction.
+		stmt = db.bankTransactionUpsertStmt
+		namedArgs = map[string]any{
+			"BankTransactionID":    tr.BankTransactionID,
+			"Type":                 tr.Type,
+			"Status":               tr.Status,
+			"Reference":            tr.Reference,
+			"Total":                tr.Total,
+			"IsReconciled":         tr.IsReconciled,
+			"Date":                 tr.Date.Format("2006-01-02"),
+			"Updated":              tr.Updated.Format("2006-01-02T15:04:05Z"),
+			"ContactID":            tr.Contact.ContactID,
+			"ContactName":          tr.Contact.Name,
+			"BankAccountAccountID": tr.BankAccount.AccountID,
+			"BankAccountName":      tr.BankAccount.Name,
+			"BankAccountCode":      tr.BankAccount.Code,
+		}
+
+		_, err = stmt.ExecContext(ctx, namedArgs)
+		if err != nil {
+			return fmt.Errorf("failed to upsert bank transaction %s: %w", tr.BankTransactionID, err)
+		}
+
+		// Insert the bank transaction line items.
+		stmt = db.bankTransactionLIInsertStmt
+
+		for _, line := range tr.LineItems {
+			namedArgs := map[string]any{
+				"LineItemID":        line.LineItemID,
+				"BankTransactionID": tr.BankTransactionID,
+				"Description":       line.Description,
+				"Quantity":          line.Quantity,
+				"UnitAmount":        line.UnitAmount,
+				"LineAmount":        line.LineAmount,
+				"AccountCode":       line.AccountCode,
+				"TaxAmount":         line.TaxAmount,
+			}
+			if err := stmt.verifyArgs(namedArgs); err != nil {
+				return err
+			}
+			_, err = stmt.ExecContext(ctx, namedArgs)
+			if err != nil {
+				return fmt.Errorf("failed to insert line item %s for transaction %s: %w", line.LineItemID, tr.BankTransactionID, err)
+			}
+		}
+	}
+
+	return tx.Commit()
 }
 
 // Donation is the concrete type of each row returned by
@@ -382,9 +520,9 @@ type Donation struct {
 	CloseDate       *time.Time `db:"close_date"`
 	PayoutReference *string    `db:"payout_reference_dfk"`
 	CreatedDate     *time.Time `db:"created_date"`
-	CreatedName     *string    `db:"created_by_name"`
+	CreatedName     *string    `db:"created_by"`
 	ModifiedDate    *time.Time `db:"last_modified_date"`
-	ModifiedName    *string    `db:"last_modified_by_name"`
+	ModifiedName    *string    `db:"last_modified_by"`
 	IsLinked        bool       `db:"is_linked"`
 	RowCount        int        `db:"row_count"`
 }
@@ -396,8 +534,7 @@ func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, link
 	log.Printf("GetDonations %s %s linkage %s <%s> %q", dateFrom.Format("2006-01-02"), dateTo.Format("2006-01-02"), linkageStatus, payoutReference, search)
 
 	// Set named statement and parameter list.
-	stmt := db.donationsGetStmt.namedStatement
-	params := db.donationsGetStmt.args
+	stmt := db.donationsGetStmt
 
 	// Determine reconciliation status.
 	switch linkageStatus {
@@ -419,14 +556,14 @@ func (db *DB) GetDonations(ctx context.Context, dateFrom, dateTo time.Time, link
 		"HereLimit":       limit,
 		"HereOffset":      offset,
 	}
-	if got, want := len(namedArgs), len(params); got != want {
-		return nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
+	if err := stmt.verifyArgs(namedArgs); err != nil {
+		return nil, err
 	}
 
 	// Use sqlx to scan results into the provided slice.
 	var donations []Donation
 	err := stmt.SelectContext(ctx, &donations, namedArgs)
-	logQuery("donations", stmt.QueryString, namedArgs, err)
+	logQuery("donations", stmt, namedArgs, err)
 	if err != nil {
 		return nil, fmt.Errorf("donations select error: %v", err)
 	}
@@ -471,8 +608,7 @@ type WRLineItem struct {
 func (db *DB) GetInvoiceWR(ctx context.Context, invoiceID string) (WRInvoice, []WRLineItem, error) {
 
 	// Set named statement and parameter list.
-	stmt := db.invoiceGetStmt.namedStatement
-	params := db.invoiceGetStmt.args
+	stmt := db.invoiceGetStmt
 
 	// invoiceWithLineItems is the concrete type of each row returned by
 	// GetInvoiceWR.
@@ -492,14 +628,14 @@ func (db *DB) GetInvoiceWR(ctx context.Context, invoiceID string) (WRInvoice, []
 		"AccountCodes": db.accountCodes,
 		"InvoiceID":    invoiceID,
 	}
-	if got, want := len(namedArgs), len(params); got != want {
-		return invoice, nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
+	if err := stmt.verifyArgs(namedArgs); err != nil {
+		return invoice, nil, err
 	}
 
 	// Use sqlx to scan results into the provided slice.
 	var iwli invoicesWLI
 	err := stmt.SelectContext(ctx, &iwli, namedArgs)
-	logQuery("invoiceWLI", stmt.QueryString, namedArgs, err)
+	logQuery("invoiceWLI", stmt, namedArgs, err)
 	if err != nil {
 		return invoice, nil, fmt.Errorf("invoice select error: %v", err)
 	}
@@ -534,14 +670,13 @@ type WRTransaction struct {
 	IsReconciled     bool      `db:"is_reconciled"`
 }
 
-// GetTransactionWR (a wide rows query) retrieves a single invoice from
-// the database with it's constituent line items. This query returns
+// GetTransactionWR (a wide rows query) retrieves a single bank transaction
+// (transaction) from the database with it's constituent line items. This query returns
 // rows for each line item.
 func (db *DB) GetTransactionWR(ctx context.Context, transactionID string) (WRTransaction, []WRLineItem, error) {
 
 	// Set named statement and parameter list.
-	stmt := db.bankTransactionGetStmt.namedStatement
-	params := db.bankTransactionGetStmt.args
+	stmt := db.bankTransactionGetStmt
 
 	// transactionWithLineItems is the concrete type of each row returned by
 	// GetTransactionWR.
@@ -561,14 +696,14 @@ func (db *DB) GetTransactionWR(ctx context.Context, transactionID string) (WRTra
 		"AccountCodes":      db.accountCodes,
 		"BankTransactionID": transactionID,
 	}
-	if got, want := len(namedArgs), len(params); got != want {
-		return transaction, nil, fmt.Errorf("namedArgs has %d arguments, expected %d", got, want)
+	if err := stmt.verifyArgs(namedArgs); err != nil {
+		return transaction, nil, err
 	}
 
 	// Use sqlx to scan results into the provided slice.
 	var twli transactionsWLI
 	err := stmt.SelectContext(ctx, &twli, namedArgs)
-	logQuery("transactionWLI", stmt.QueryString, namedArgs, err)
+	logQuery("transactionWLI", stmt, namedArgs, err)
 	if err != nil {
 		return transaction, nil, fmt.Errorf("transaction select error: %v", err)
 	}
@@ -585,4 +720,67 @@ func (db *DB) GetTransactionWR(ctx context.Context, transactionID string) (WRTra
 		lineItems[i] = li.WRLineItem
 	}
 	return transaction, lineItems, nil
+}
+
+// UpsertOpportunities performs a transactional upsert for a slice of Salesforce Records
+// into the donations table.
+func (db *DB) UpsertOpportunities(ctx context.Context, donations []salesforce.Donation) error {
+	if len(donations) == 0 {
+		return nil
+	}
+
+	// Begin Transaction.
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op if commit succeeds.
+
+	stmt := db.donationUpsertStmt
+
+	for _, dnt := range donations {
+		additionalFieldsJSON, err := json.Marshal(dnt.AdditionalFields)
+		if err != nil {
+			return fmt.Errorf("failed to marshal additional fields for donation %s: %w", dnt.ID, err)
+		}
+
+		// namedArgs uses sqlx's named query capability.
+		namedArgs := map[string]any{
+			"ID":                   dnt.ID,
+			"Name":                 dnt.Name,
+			"Amount":               dnt.Amount,
+			"CloseDate":            dnt.CloseDate.Time,
+			"PayoutReference":      dnt.PayoutReference,
+			"CreatedDate":          dnt.CreatedDate.Time,
+			"CreatedBy":            dnt.CreatedBy,
+			"LastModifiedDate":     dnt.LastModifiedDate.Time,
+			"LastModifiedBy":       dnt.LastModifiedBy,
+			"AdditionalFieldsJSON": string(additionalFieldsJSON),
+		}
+		if err := stmt.verifyArgs(namedArgs); err != nil {
+			return err
+		}
+
+		_, err = stmt.ExecContext(ctx, namedArgs)
+		if err != nil {
+			return fmt.Errorf("failed to upsert donation %s: %w", dnt.ID, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// logQuery is for helping debug SQL issues.
+func logQuery(name string, stmt *parameterizedStmt, args map[string]any, err error) {
+	const debug = false
+	if !debug {
+		return
+	}
+	log.Printf(
+		"sql: %s\n---\nquery:\n%q\n---\nargs: %#v\nerror: %v\n",
+		name,
+		stmt.QueryString,
+		args,
+		err,
+	)
 }

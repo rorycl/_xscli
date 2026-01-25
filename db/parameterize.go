@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// ParameterizedSQLTemplate is a struct holding a parsed template with
-// parameters extracted and arguments replaced by the '?' symbol.
+// ParameterizedSQLTemplate is a struct holding a parsed template with parameters
+// extracted and arguments replaced by the '?' symbol.
 type ParameterizedSQLTemplate struct {
 	Body       []byte
 	Parameters []string
@@ -28,8 +28,8 @@ Body:   %s
 //
 //	,date('2026-03-31') AS DateTo    /* @param */
 //
-// for extracting the `DateTo` parameter and replacing the provided
-// parameter with a '?', for example:
+// for extracting the `DateTo` parameter and replacing the provided parameter with a
+// '?', for example:
 //
 //	,date(?) AS DateTo    /* @param */
 //
@@ -43,27 +43,24 @@ var (
 		`(?:null)`,                   // null
 	}
 
-	// regexParam is made of 4 components where are named for
-	// identification. The 'value' element is built up out of the
-	// non-capturing paramAtoms items.
+	// regexParam is made of 4 components where are named for identification. The
+	// 'value' element is built up out of the non-capturing paramAtoms items.
 	regexpParam = regexp.MustCompile(fmt.Sprintf(
 		`(?P<value>%s)(?P<as>\s+AS\s+)(?P<param>[A-Za-z0-9_]+)(?P<end>\s+/\* @param \*/)`,
 		strings.Join(paramAtoms, "|"),
 	))
 )
 
-// parameterize takes an sql template as a slice of bytes with
-// (potentially) inline field definitions in order to provide the
-// functionality of functional procedural sql with declared variables in
-// sqlite.
+// parameterize takes an sql template as a slice of bytes with (potentially) inline
+// field definitions in order to provide the functionality of functional procedural sql
+// with declared variables in sqlite.
 //
-// The inline field definitions are defined with an `/* @param */`
-// marker such as:
+// The inline field definitions are defined with an `/* @param */` marker such as:
 //
 //	,date('2026-03-31') AS DateTo    /* @param */
 //
-// which are then replaced with SQL prepared statement '?' symbols and
-// the field name extracted as a parameter, returning
+// which are then replaced with SQL prepared statement '?' symbols and the field name
+// extracted as a parameter, returning
 //
 //	*ParameterizedSQLTemplate{
 //	    Parameters: []string{"DateTo"},
@@ -92,8 +89,7 @@ func parameterize(tpl []byte) (*ParameterizedSQLTemplate, error) {
 	return pst, nil
 }
 
-// ParameterizeFile takes an sql file and returns a
-// ParameterizedSQLTemplate or error.
+// ParameterizeFile takes an sql file and returns a ParameterizedSQLTemplate or error.
 func ParameterizeFile(fileFS fs.FS, filePath string) (*ParameterizedSQLTemplate, error) {
 
 	fileBytes, err := fs.ReadFile(fileFS, filePath)

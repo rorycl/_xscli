@@ -63,7 +63,7 @@ FROM (
                 payout_reference_dfk
                 ,sum(amount) AS donation_sum
             FROM
-                salesforce_opportunities
+                donations
             GROUP BY
                 payout_reference_dfk
         ) rds ON (rds.payout_reference_dfk = i.invoice_number)
