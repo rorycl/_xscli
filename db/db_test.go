@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"reconciler/apiclients/xero"
 	"testing"
@@ -23,16 +24,55 @@ func ptrBool(b bool) *bool { return &b }
 func ptrFloat64(f float64) *float64 { return &f }
 
 // setupTestDB sets up a test database connection.
-func setupTestDB(t *testing.T) *DB {
+func setupTestDB(t *testing.T) (*DB, func()) {
 	t.Helper()
+
+	prepareNamedStatementsOnStartup = false
+	defer func() {
+		prepareNamedStatementsOnStartup = true
+	}()
+
 	accountCodes := "^(53|55|57)"
 	sqlDir := os.DirFS("sql")
 
-	testDB, err := New("testdata/test.db", sqlDir, accountCodes)
+	var err error
+	testDB, err := NewConnection("file::memory:?cache=shared", sqlDir, accountCodes)
 	if err != nil {
-		t.Fatalf("testDB opening error: %v", err)
+		t.Fatalf("in-memory test database opening error: %v", err)
 	}
-	return testDB
+
+	// Load the schema definitions.
+	if err := testDB.InitSchema(sqlDir, "schema.sql"); err != nil {
+		_ = testDB.Close()
+		t.Fatalf("Failed to initialize schema for test database: %v", err)
+	}
+
+	// Load the test data.
+	data, err := fs.ReadFile(sqlDir, "load_data.sql")
+	if err != nil {
+		t.Fatalf("Failed to read file for loading data for test DB: %v", err)
+	}
+	_, err = testDB.Exec(string(data))
+	if err != nil {
+		_ = testDB.Close()
+		t.Fatalf("Failed to load data for test database: %v", err)
+	}
+
+	// Prepare the functions and named statements.
+	err = testDB.prepareNamedStatements()
+	if err != nil {
+		t.Fatalf("could not prepare named statements: %v", err)
+	}
+
+	// closeDBFunc is a closure for running by the function consumer.
+	closeDBFunc := func() {
+		err := testDB.Close()
+		if err != nil {
+			t.Fatalf("unexpected db close error: %v", err)
+		}
+	}
+
+	return testDB, closeDBFunc
 }
 
 // Index:
@@ -50,7 +90,8 @@ func setupTestDB(t *testing.T) *DB {
 
 func Test01_UpsertAccounts(t *testing.T) {
 
-	testDB := setupTestDB(t)
+	testDB, closeDB := setupTestDB(t)
+	t.Cleanup(closeDB)
 	ctx := context.Background()
 
 	now := time.Now()
@@ -109,7 +150,8 @@ func Test01_UpsertAccounts(t *testing.T) {
 // Test02_InvoicesQuery tests searching the database invoice records.
 func Test02_InvoicesQuery(t *testing.T) {
 
-	testDB := setupTestDB(t)
+	testDB, closeDB := setupTestDB(t)
+	t.Cleanup(closeDB)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -298,7 +340,8 @@ func Test02_InvoicesQuery(t *testing.T) {
 // Test03_UpsertInvoices tests upserting invoices.
 func Test03_UpsertInvoices(t *testing.T) {
 
-	testDB := setupTestDB(t)
+	testDB, closeDB := setupTestDB(t)
+	t.Cleanup(closeDB)
 	ctx := context.Background()
 
 	invoices := []xero.Invoice{
@@ -368,7 +411,8 @@ func Test03_UpsertInvoices(t *testing.T) {
 // Test04_BankTransactionsQuery tests searching the database bank transactions.
 func Test04_BankTransactionsQuery(t *testing.T) {
 
-	testDB := setupTestDB(t)
+	testDB, closeDB := setupTestDB(t)
+	t.Cleanup(closeDB)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -534,7 +578,8 @@ func Test04_BankTransactionsQuery(t *testing.T) {
 // Test06_DonationsQuery tests searching the donation SQL records.
 func Test06_DonationsQuery(t *testing.T) {
 
-	testDB := setupTestDB(t)
+	testDB, closeDB := setupTestDB(t)
+	t.Cleanup(closeDB)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -759,7 +804,8 @@ Invoice: {{ .Invoice.ID }} No {{ .Invoice.InvoiceNumber }} {{ .Invoice.Total }}
 // Test07_InvoiceWithLineItemsQuery tests retrieving an invoice with line items.
 func Test07_InvoiceWithLineItemsQuery(t *testing.T) {
 
-	testDB := setupTestDB(t)
+	testDB, closeDB := setupTestDB(t)
+	t.Cleanup(closeDB)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -861,7 +907,8 @@ func Test07_InvoiceWithLineItemsQuery(t *testing.T) {
 // line items.
 func Test08_BankTransactionsWithLineItemsQuery(t *testing.T) {
 
-	testDB := setupTestDB(t)
+	testDB, closeDB := setupTestDB(t)
+	t.Cleanup(closeDB)
 	ctx := context.Background()
 
 	tests := []struct {
