@@ -1,4 +1,4 @@
-package main
+package web
 
 import (
 	"database/sql"
@@ -10,8 +10,7 @@ import (
 	"os"
 	"time"
 
-	// linked subapp via go.work
-	"dbquery"
+	"reconciler/db"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -25,7 +24,7 @@ var (
 	accountCodes = "^(53|55|57)"
 
 	// database connection
-	db *dbquery.DB
+	dbCon *db.DB
 
 	// pageLen is the number of items listed on a page
 	pageLen = 15
@@ -63,7 +62,7 @@ func main() {
 
 	var server *http.Server
 
-	db, err = dbquery.New(dbFile, mounts.sqlDir, accountCodes)
+	dbCon, err = db.New(dbFile, mounts.sqlDir, accountCodes)
 	if err != nil {
 		fmt.Println("database setup error", err)
 		os.Exit(1)
@@ -171,7 +170,7 @@ func handleInvoices(w http.ResponseWriter, r *http.Request) {
 	// errors back to the template if necessary.
 	data := struct {
 		PageTitle   string
-		Invoices    []dbquery.Invoice
+		Invoices    []db.Invoice
 		Form        *SearchForm
 		Validator   *Validator
 		Pagination  *Pagination
@@ -190,7 +189,7 @@ func handleInvoices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invoices, err := db.GetInvoices(
+	invoices, err := dbCon.GetInvoices(
 		ctx,
 		form.ReconciliationStatus,
 		form.DateFrom,
@@ -250,7 +249,7 @@ func handleBankTransactions(w http.ResponseWriter, r *http.Request) {
 	// errors back to the template if necessary.
 	data := struct {
 		PageTitle        string
-		BankTransactions []dbquery.BankTransaction
+		BankTransactions []db.BankTransaction
 		Form             *SearchForm
 		Validator        *Validator
 		Pagination       *Pagination
@@ -269,7 +268,7 @@ func handleBankTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transactions, err := db.GetBankTransactions(
+	transactions, err := dbCon.GetBankTransactions(
 		ctx,
 		form.ReconciliationStatus,
 		form.DateFrom,
@@ -352,7 +351,7 @@ func handleDonations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	donations, err := db.GetDonations(
+	donations, err := dbCon.GetDonations(
 		ctx,
 		form.DateFrom,
 		form.DateTo,
@@ -411,7 +410,7 @@ func handleInvoiceDetail(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		PageTitle string
-		Invoice   dbquery.WRInvoice
+		Invoice   db.WRInvoice
 		LineItems []viewLineItem
 		ID        string
 		TabType   string
@@ -422,8 +421,8 @@ func handleInvoiceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var err error
-	var lineItems []dbquery.WRLineItem
-	data.Invoice, lineItems, err = db.GetInvoiceWR(ctx, invoiceID)
+	var lineItems []db.WRLineItem
+	data.Invoice, lineItems, err = dbCon.GetInvoiceWR(ctx, invoiceID)
 	if err != nil && err != sql.ErrNoRows {
 		log.Printf("error: database GetInvoices failed: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -461,7 +460,7 @@ func handleBankTransactionDetail(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		PageTitle   string
-		Transaction dbquery.WRTransaction
+		Transaction db.WRTransaction
 		LineItems   []viewLineItem
 		ID          string
 		TabType     string
@@ -472,8 +471,8 @@ func handleBankTransactionDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var err error
-	var lineItems []dbquery.WRLineItem
-	data.Transaction, lineItems, err = db.GetTransactionWR(ctx, transactionReference)
+	var lineItems []db.WRLineItem
+	data.Transaction, lineItems, err = dbCon.GetTransactionWR(ctx, transactionReference)
 	if err != nil && err != sql.ErrNoRows {
 		log.Printf("error: database GetTransaction failed: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -533,7 +532,7 @@ func handlePartialDonationsLinked(w http.ResponseWriter, r *http.Request) {
 		TabType:    "link",
 	}
 
-	donations, err := db.GetDonations(
+	donations, err := dbCon.GetDonations(
 		ctx,
 		defaultStartDate,
 		defaultEndDate,
@@ -643,7 +642,7 @@ func handlePartialDonationsFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	donations, err := db.GetDonations(
+	donations, err := dbCon.GetDonations(
 		ctx,
 		form.DateFrom,
 		form.DateTo,
@@ -683,7 +682,7 @@ func handlePartialDonationsFind(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// viewDonation  is a view version of the dbquery.Donations type,
+// viewDonation  is a view version of the db.Donations type,
 // with non-pointer fields.
 type viewDonation struct {
 	ID              string
@@ -699,7 +698,7 @@ type viewDonation struct {
 	RowCount        int
 }
 
-func newViewDonations(donations []dbquery.Donation) []viewDonation {
+func newViewDonations(donations []db.Donation) []viewDonation {
 	dv := make([]viewDonation, len(donations))
 	for i, d := range donations {
 		dv[i].ID = d.ID
@@ -732,7 +731,7 @@ func newViewDonations(donations []dbquery.Donation) []viewDonation {
 	return dv
 }
 
-// viewLineItems is a view version of the dbquery.WRLineItem with
+// viewLineItems is a view version of the db.WRLineItem with
 // non-pointer fields.
 type viewLineItem struct {
 	AccountCode    string
@@ -745,7 +744,7 @@ type viewLineItem struct {
 
 // newViewLineItems converts a slice of WRLineItem to a slice of
 // viewLineItem.
-func newViewLineItems(lineItems []dbquery.WRLineItem) []viewLineItem {
+func newViewLineItems(lineItems []db.WRLineItem) []viewLineItem {
 	viewItems := make([]viewLineItem, len(lineItems))
 	for i, li := range lineItems {
 		if li.AccountCode != nil {
