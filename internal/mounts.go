@@ -110,12 +110,21 @@ func (fm *FileMount) Materialize(root string) error {
 		return fmt.Errorf("materialize root %q invalid: %v", root, err)
 	}
 
+	// Make a dir named fm.MountName at the top of root.
+	mountRoot := filepath.Join(root, fm.MountName)
+	if _, err := os.Stat(mountRoot); !os.IsNotExist(err) {
+		return fmt.Errorf("materialization path %q already exists", mountRoot)
+	}
+	if err := os.MkdirAll(mountRoot, 0755); err != nil {
+		return fmt.Errorf("could not create mount root %q: %v", mountRoot, err)
+	}
+
 	// Recurse, writing files and making directories from the fs.FS.
 	err := fs.WalkDir(fm.FS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err // error propogation
 		}
-		fullPath := filepath.Join(root, path)
+		fullPath := filepath.Join(mountRoot, path)
 
 		if d.IsDir() {
 			err := os.MkdirAll(fullPath, 0755)
@@ -145,18 +154,22 @@ func (fm *FileMount) Materialize(root string) error {
 // PrintFS makes structured print output from an fs.FS.
 func PrintFS(thisFS fs.FS) (string, error) {
 	var printOutput strings.Builder
+	var topSeen bool
+	tpl := "%s[%s] %s%s (%s)\n"
+
 	err := fs.WalkDir(thisFS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err // propogate
 		}
-		tpl := "%s[%s] %s%s (%s)\n"
+		if !topSeen { // some special formatting for the top level
+			_, err = printOutput.WriteString(fmt.Sprintf(tpl, "\n", "d", ".", "/", "."))
+			topSeen = true
+			return nil
+		}
 		depth := strings.Count(path, string(os.PathSeparator))
 		indent := strings.Repeat("  ", depth)
 		typer := "f"
 		name := d.Name()
-		if path == "." {
-			name = "." // special case for the root.
-		}
 		slash := " "
 		if d.IsDir() {
 			slash = string(os.PathSeparator)

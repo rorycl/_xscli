@@ -99,7 +99,16 @@ func TestMounts(t *testing.T) {
 				t.Errorf("unexpected error %v", err)
 			}
 
-			materializedFSAsString, err := PrintFS(os.DirFS(testDir))
+			// Given a target of /tmp the materialized output is put in (for example)
+			// /tmp/testdata/. To compensate for this the top level of the materialized
+			// output is popped.
+
+			matFS := os.DirFS(testDir)
+			materializedFS, err := fs.Sub(matFS, tt.mountName)
+			if err != nil {
+				t.Fatalf("could not submount materialized dir")
+			}
+			materializedFSAsString, err := PrintFS(materializedFS)
 			if err != nil {
 				t.Fatal(err)
 			}
