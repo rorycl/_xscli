@@ -129,6 +129,48 @@ func NewConnection(dbPath string, sqlDir string, accountCodes string) (*DB, erro
 	return db, nil
 }
 
+// NewConnectionInTestMode runs a new connection in test mode, loading the test data.
+func NewConnectionInTestMode(dbPath string, sqlDir string, accountCodes string) (*DB, error) {
+	if !strings.Contains(dbPath, ":memory:") {
+		return nil, fmt.Errorf("db path %q invalid for test mode", dbPath)
+	}
+	prepareNamedStatementsOnStartup = false
+	defer func() {
+		prepareNamedStatementsOnStartup = true
+	}()
+
+	testDB, err := NewConnection(dbPath, sqlDir, accountCodes)
+	if err != nil {
+		return nil, fmt.Errorf("could not initialise test database: %w", err)
+	}
+
+	// Load the schema definitions.
+	if err := testDB.InitSchema(testDB.sqlFS, "schema.sql"); err != nil {
+		_ = testDB.Close()
+		return nil, fmt.Errorf("Failed to initialize schema for test database: %v", err)
+	}
+
+	// Load the test data.
+	data, err := fs.ReadFile(testDB.sqlFS, "load_data.sql")
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read file for loading data for test DB: %w", err)
+	}
+	_, err = testDB.Exec(string(data))
+	if err != nil {
+		_ = testDB.Close()
+		return nil, fmt.Errorf("Failed to load data for test database: %w", err)
+	}
+
+	// Prepare the functions and named statements.
+	err = testDB.prepareNamedStatements()
+	if err != nil {
+		return nil, fmt.Errorf("could not prepare named statements: %v", err)
+	}
+
+	return testDB, nil
+
+}
+
 // prepareNamedStatements prepares all the named statements for this database connection.
 func (db *DB) prepareNamedStatements() error {
 	var err error
