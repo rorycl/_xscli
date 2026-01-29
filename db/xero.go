@@ -41,7 +41,7 @@ func (db *DB) AccountsUpsert(ctx context.Context, accounts []xero.Account) error
 		}
 		_, err := stmt.ExecContext(ctx, namedArgs)
 		if err != nil {
-			logQuery("accounts", stmt, namedArgs, err)
+			db.logQuery("accounts", stmt, namedArgs, err)
 			return fmt.Errorf("failed to upsert account %s: %w", acc.AccountID, err)
 		}
 	}
@@ -92,19 +92,22 @@ func (db *DB) InvoicesGet(ctx context.Context, reconciliationStatus string, date
 		"HereOffset":           offset,
 	}
 	if err := stmt.verifyArgs(namedArgs); err != nil {
+		db.logger.Warn(fmt.Sprintf("invoices verify args error: %v", err))
 		return nil, err
 	}
 
 	// Scan results into the provided slice.
 	var invoices []Invoice
 	err := stmt.SelectContext(ctx, &invoices, namedArgs)
-	logQuery("invoices", stmt, namedArgs, err)
+	db.logQuery("invoices", stmt, namedArgs, err)
 	if err != nil {
+		db.logger.Warn(fmt.Sprintf("invoices select error: %v", err))
 		return nil, fmt.Errorf("invoices select error: %v", err)
 	}
 
 	// Return early if no rows were returned.
 	if len(invoices) == 0 {
+		db.logger.Info("no invoices were found.")
 		return nil, sql.ErrNoRows
 	}
 	return invoices, nil
@@ -238,7 +241,7 @@ func (db *DB) BankTransactionsGet(ctx context.Context, reconciliationStatus stri
 	var transactions []BankTransaction
 	err := stmt.SelectContext(ctx, &transactions, namedArgs)
 	if err != nil {
-		logQuery("bank transactions", stmt, namedArgs, err)
+		db.logQuery("bank transactions", stmt, namedArgs, err)
 		return nil, fmt.Errorf("bank transactions select error: %v", err)
 	}
 
@@ -387,7 +390,7 @@ func (db *DB) InvoiceWRGet(ctx context.Context, invoiceID string) (WRInvoice, []
 	// Use sqlx to scan results into the provided slice.
 	var iwli invoicesWLI
 	err := stmt.SelectContext(ctx, &iwli, namedArgs)
-	logQuery("invoiceWLI", stmt, namedArgs, err)
+	db.logQuery("invoiceWLI", stmt, namedArgs, err)
 	if err != nil {
 		return invoice, nil, fmt.Errorf("invoice select error: %v", err)
 	}
@@ -455,7 +458,7 @@ func (db *DB) BankTransactionWRGet(ctx context.Context, transactionID string) (W
 	// Use sqlx to scan results into the provided slice.
 	var twli transactionsWLI
 	err := stmt.SelectContext(ctx, &twli, namedArgs)
-	logQuery("transactionWLI", stmt, namedArgs, err)
+	db.logQuery("transactionWLI", stmt, namedArgs, err)
 	if err != nil {
 		return transaction, nil, fmt.Errorf("transaction select error: %v", err)
 	}

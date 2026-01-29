@@ -1,6 +1,7 @@
 package db
 
 import (
+	"log/slog"
 	"testing"
 	"time"
 )
@@ -25,6 +26,9 @@ func setupTestDB(t *testing.T) (*DB, func()) {
 	if err != nil {
 		t.Fatalf("in-memory test database opening error: %v", err)
 	}
+
+	// set log level to Debu
+	testDB.SetLogLevel(slog.LevelWarn)
 
 	// closeDBFunc is a closure for running by the function consumer.
 	closeDBFunc := func() {

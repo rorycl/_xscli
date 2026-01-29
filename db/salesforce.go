@@ -67,7 +67,7 @@ func (db *DB) DonationsGet(ctx context.Context, dateFrom, dateTo time.Time, link
 	// Use sqlx to scan results into the provided slice.
 	var donations []Donation
 	err := stmt.SelectContext(ctx, &donations, namedArgs)
-	logQuery("donations", stmt, namedArgs, err)
+	db.logQuery("donations", stmt, namedArgs, err)
 	if err != nil {
 		return nil, fmt.Errorf("donations select error: %v", err)
 	}
@@ -120,7 +120,7 @@ func (db *DB) UpsertDonations(ctx context.Context, donations []salesforce.Donati
 		}
 		_, err = stmt.ExecContext(ctx, namedArgs)
 		if err != nil {
-			logQuery("upsert donations", stmt, namedArgs, err)
+			db.logQuery("upsert donations", stmt, namedArgs, err)
 			return fmt.Errorf("failed to upsert donation %s: %w", dnt.ID, err)
 		}
 	}

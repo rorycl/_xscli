@@ -16,7 +16,8 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
+	"os"
 	"reconciler/internal"
 	"strings"
 
@@ -54,6 +55,7 @@ type DB struct {
 	*sqlx.DB
 	accountCodes string
 	sqlFS        fs.FS
+	logger       *slog.Logger
 
 	// Prepared statements.
 	accountUpsertStmt *parameterizedStmt
@@ -74,6 +76,8 @@ type DB struct {
 	donationUpsertStmt *parameterizedStmt
 }
 
+// prepareNamedStatementsOnStartup sets whether to register the prepared SQL statements
+// on startup. This is used for testing to delay registration. The default is true.
 var prepareNamedStatementsOnStartup bool = true
 
 // NewConnection creates a new connection to an SQLite database at the given path.
@@ -110,11 +114,18 @@ func NewConnection(dbPath string, sqlDir string, accountCodes string) (*DB, erro
 		return nil, err
 	}
 
+	// Logger setup.
+	logger := slog.New(slog.NewTextHandler(
+		os.Stdout,
+		&slog.HandlerOptions{Level: slog.LevelInfo},
+	))
+
 	// Wrap the standard library *sql.DB with sqlx.
 	db := &DB{
 		DB:           sqlx.NewDb(dbDB, "sqlite"),
 		accountCodes: accountCodes,
 		sqlFS:        sqlFS,
+		logger:       logger,
 	}
 
 	// Normally prepared statements are run on startup, but need to be deferred for
@@ -169,6 +180,13 @@ func NewConnectionInTestMode(dbPath string, sqlDir string, accountCodes string) 
 
 	return testDB, nil
 
+}
+
+// SetLogLevel adjusts the logging level of the db module.
+func (db *DB) SetLogLevel(lvl slog.Level) {
+	opts := &slog.HandlerOptions{Level: lvl}
+	handler := slog.NewTextHandler(os.Stdout, opts)
+	db.logger = slog.New(handler)
 }
 
 // prepareNamedStatements prepares all the named statements for this database connection.
@@ -273,16 +291,14 @@ func (db *DB) InitSchema(fileFS fs.FS, filePath string) error {
 }
 
 // logQuery is for helping debug SQL issues.
-func logQuery(name string, stmt *parameterizedStmt, args map[string]any, err error) {
-	const debug = false
-	if !debug {
-		return
-	}
-	log.Printf(
-		"sql: %s\n---\nquery:\n%q\n---\nargs: %#v\nerror: %v\n",
-		name,
-		stmt.QueryString,
-		args,
-		err,
+func (db *DB) logQuery(name string, stmt *parameterizedStmt, args map[string]any, err error) {
+	db.logger.Debug(
+		fmt.Sprintf(
+			"sql: %s\n---\nquery:\n%q\n---\nargs: %#v\nerror: %v\n",
+			name,
+			stmt.QueryString,
+			args,
+			err,
+		),
 	)
 }
