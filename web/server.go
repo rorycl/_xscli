@@ -1,6 +1,25 @@
 package web
 
+// This file describes the web server for this project.
+//
+// Note that modules called by this server should provide self-describing errors since
+// these are sent directly to an internal server error func:
+//
+//	web.serverError(w, r, err)
+//
+// This web server also sets out each endpoint handler as a HandlerFunc. This allows for
+// the router to provide arguments to the handler, as discussed in Mat Ryer's post at
+//
+//	https://grafana.com/blog/how-i-write-http-services-in-go-after-13-years/
+//
+// Another use of this pattern is to initialise only the templates needed for a specific
+// endpoint. This allows for endpoint-specific template error catching, and potential
+// use-case specific overriding of template `block` components, if required.
+//
+// Helper functions, such as `serverError` and `clientError` are at the end of the file.
+
 import (
+	"bytes"
 	"database/sql"
 	"embed"
 	"errors"
@@ -90,11 +109,13 @@ func (web *WebApp) routes() http.Handler {
 	r.Handle("/invoices", web.handleInvoices())
 	r.Handle("/bank-transactions", web.handleBankTransactions())
 	r.Handle("/donations", web.handleDonations())
+	// Todo: consider adding campaigns page
 
 	// Detail pages.
 	// Note that the regexp works for uuids and the system test data.
 	r.Handle("/invoice/{id:[A-Za-z0-9_-]+}", web.handleInvoiceDetail())
 	r.Handle("/bank-transaction/{id:[A-Za-z0-9_-]+}", web.handleBankTransactionDetail())
+	// Todo: donation detail page.
 
 	// Partial pages.
 	// These are HTMX partials showing donation listings in "linked" and "find to link" modes.
@@ -124,11 +145,7 @@ func (web *WebApp) handleConnect() http.Handler {
 	templates := template.Must(template.ParseFS(web.templateFS, tpls...))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := templates.ExecuteTemplate(w, name, nil)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, nil)
 	})
 }
 
@@ -140,11 +157,7 @@ func (web *WebApp) handleRefresh() http.Handler {
 	templates := template.Must(template.ParseFS(web.templateFS, tpls...))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := templates.ExecuteTemplate(w, name, nil)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, nil)
 	})
 }
 
@@ -168,8 +181,7 @@ func (web *WebApp) handleInvoices() http.Handler {
 
 		form := NewSearchForm()
 		if err := DecodeURLParams(r, form); err != nil {
-			web.log.Printf("error: could not decode the url parameters: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -199,11 +211,7 @@ func (web *WebApp) handleInvoices() http.Handler {
 
 		// Render template with errors and return if the form is invalid.
 		if !validator.Valid() {
-			err := templates.ExecuteTemplate(w, name, nil)
-			if err != nil {
-				web.log.Printf("Error rendering template %s: %v", name, err)
-				http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-			}
+			web.render(w, r, templates, name, data)
 			return
 		}
 
@@ -217,8 +225,7 @@ func (web *WebApp) handleInvoices() http.Handler {
 			form.Offset(),
 		)
 		if err != nil && err != sql.ErrNoRows {
-			web.log.Printf("error: database GetInvoices failed: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -236,15 +243,10 @@ func (web *WebApp) handleInvoices() http.Handler {
 		}
 		data.Pagination, err = NewPagination(pageLen, recordsNo, form.Page, r.URL.Query())
 		if err != nil {
-			web.log.Printf("pagination error: %v", err)
-			http.Redirect(w, r, "/invoices", http.StatusFound)
+			web.serverError(w, r, err)
 		}
 
-		err = templates.ExecuteTemplate(w, name, data)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, data)
 	})
 }
 
@@ -261,8 +263,7 @@ func (web *WebApp) handleBankTransactions() http.Handler {
 
 		form := NewSearchForm()
 		if err := DecodeURLParams(r, form); err != nil {
-			web.log.Printf("error: could not decode the url parameters: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -292,11 +293,7 @@ func (web *WebApp) handleBankTransactions() http.Handler {
 
 		// Render template with errors and return if the form is invalid.
 		if !validator.Valid() {
-			err := templates.ExecuteTemplate(w, name, data)
-			if err != nil {
-				web.log.Printf("Error rendering template %s: %v", name, err)
-				http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-			}
+			web.render(w, r, templates, name, data)
 			return
 		}
 
@@ -310,8 +307,7 @@ func (web *WebApp) handleBankTransactions() http.Handler {
 			form.Offset(),
 		)
 		if err != nil && err != sql.ErrNoRows {
-			web.log.Printf("error: database GetBankTransactions failed: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -329,15 +325,10 @@ func (web *WebApp) handleBankTransactions() http.Handler {
 		}
 		data.Pagination, err = NewPagination(pageLen, recordsNo, form.Page, r.URL.Query())
 		if err != nil {
-			web.log.Printf("pagination error: %v", err)
-			http.Redirect(w, r, "/banktransactions", http.StatusFound)
+			web.serverError(w, r, err)
 		}
 
-		err = templates.ExecuteTemplate(w, name, data)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, data)
 	})
 }
 
@@ -354,8 +345,7 @@ func (web *WebApp) handleDonations() http.Handler {
 
 		form := NewSearchDonationsForm()
 		if err := DecodeURLParams(r, form); err != nil {
-			web.log.Printf("error: could not decode the url parameters: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -389,11 +379,7 @@ func (web *WebApp) handleDonations() http.Handler {
 
 		// Render template with errors and return if the form is invalid.
 		if !validator.Valid() {
-			err := templates.ExecuteTemplate(w, name, data)
-			if err != nil {
-				web.log.Printf("Error rendering template %s: %v", name, err)
-				http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-			}
+			web.render(w, r, templates, name, data)
 			return
 		}
 
@@ -408,8 +394,7 @@ func (web *WebApp) handleDonations() http.Handler {
 			form.Offset(),
 		)
 		if err != nil && err != sql.ErrNoRows {
-			web.log.Printf("error: database GetDonations failed: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -434,11 +419,7 @@ func (web *WebApp) handleDonations() http.Handler {
 			http.Redirect(w, r, "/donations", http.StatusFound)
 		}
 
-		err = templates.ExecuteTemplate(w, name, data)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, data)
 	})
 }
 
@@ -453,16 +434,13 @@ func (web *WebApp) handleInvoiceDetail() http.Handler {
 
 		ctx := r.Context()
 
-		vars := mux.Vars(r)
-		if vars == nil {
-			web.log.Printf("error: invoiceID capture (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		// Extract url parameters.
+		vars, err := validMuxVars(mux.Vars(r), "id")
+		if err != nil {
+			web.clientError(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		invoiceID, ok := vars["id"]
-		if !ok {
-			web.log.Printf("error: id not in mux.Vars (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		invoiceID := vars["id"]
 
 		data := struct {
 			PageTitle string
@@ -476,12 +454,10 @@ func (web *WebApp) handleInvoiceDetail() http.Handler {
 			TabType:   "link", // by default the donations tab type is "link", not "find"
 		}
 
-		var err error
 		var lineItems []db.WRLineItem
 		data.Invoice, lineItems, err = web.db.InvoiceWRGet(ctx, invoiceID)
 		if err != nil && err != sql.ErrNoRows {
-			web.log.Printf("error: database GetInvoices failed: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -489,16 +465,11 @@ func (web *WebApp) handleInvoiceDetail() http.Handler {
 
 		// Return a 404 if no invoice was found.
 		if errors.Is(err, sql.ErrNoRows) {
-			web.log.Printf("Invoice: %q not found", invoiceID)
-			http.Error(w, fmt.Sprintf("Invoice %q not found", invoiceID), http.StatusNotFound)
+			web.notFound(w, r, fmt.Sprintf("Invoice: %q not found", invoiceID))
 			return
 		}
 
-		err = templates.ExecuteTemplate(w, name, data)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, data)
 	})
 }
 
@@ -514,16 +485,13 @@ func (web *WebApp) handleBankTransactionDetail() http.Handler {
 
 		ctx := r.Context()
 
-		vars := mux.Vars(r)
-		if vars == nil {
-			web.log.Printf("error: bank transaction capture (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		// Extract url parameters.
+		vars, err := validMuxVars(mux.Vars(r), "id")
+		if err != nil {
+			web.clientError(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		transactionReference, ok := vars["id"]
-		if !ok {
-			web.log.Printf("error: id not in mux.Vars (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		transactionReference := vars["id"]
 
 		data := struct {
 			PageTitle   string
@@ -537,12 +505,10 @@ func (web *WebApp) handleBankTransactionDetail() http.Handler {
 			TabType:   "link", // by default the donations tab type is "link", not "find"
 		}
 
-		var err error
 		var lineItems []db.WRLineItem
 		data.Transaction, lineItems, err = web.db.BankTransactionWRGet(ctx, transactionReference)
 		if err != nil && err != sql.ErrNoRows {
-			web.log.Printf("error: database GetTransaction failed: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -550,16 +516,12 @@ func (web *WebApp) handleBankTransactionDetail() http.Handler {
 
 		// Return a 404 if no bank transaction was found.
 		if errors.Is(err, sql.ErrNoRows) {
-			web.log.Printf("Bank Transaction: %q not found", transactionReference)
-			http.Error(w, fmt.Sprintf("Bank Transaction %q not found", transactionReference), http.StatusNotFound)
+			web.notFound(w, r, fmt.Sprintf("Bank Transaction: %q not found", transactionReference))
 			return
 		}
 
-		err = templates.ExecuteTemplate(w, name, data)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, data)
+
 	})
 }
 
@@ -575,21 +537,14 @@ func (web *WebApp) handlePartialDonationsLinked() http.Handler {
 
 		ctx := r.Context()
 
-		vars := mux.Vars(r)
-		if vars == nil {
-			web.log.Printf("error: linked donations vars capture (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		// Extract url parameters.
+		vars, err := validMuxVars(mux.Vars(r), "type", "id")
+		if err != nil {
+			web.clientError(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		typer, ok := vars["type"]
-		if !ok {
-			web.log.Printf("error: type not in mux.Vars (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-		id, ok := vars["id"]
-		if !ok {
-			web.log.Printf("error: id not in mux.Vars (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		typer := vars["type"]
+		id := vars["id"]
 
 		// Initialise pagination for default state.
 		// Todo: fix page number (here 1)
@@ -620,8 +575,7 @@ func (web *WebApp) handlePartialDonationsLinked() http.Handler {
 			0, // form offset
 		)
 		if err != nil && err != sql.ErrNoRows {
-			web.log.Printf("error: database GetDonations failed: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -644,14 +598,11 @@ func (web *WebApp) handlePartialDonationsLinked() http.Handler {
 		// Todo: fix page number (here 1)
 		data.Pagination, err = NewPagination(pageLen, recordsNo, 1, r.URL.Query())
 		if err != nil {
+			// web.serverError(w, r, err)
 			web.log.Printf("pagination error: %v", err)
 		}
 
-		err = templates.ExecuteTemplate(w, name, data)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, data)
 	})
 }
 
@@ -669,25 +620,23 @@ func (web *WebApp) handlePartialDonationsFind() http.Handler {
 
 		vars := mux.Vars(r)
 		if vars == nil {
-			web.log.Printf("error: linked donations vars capture (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, errors.New("no vars received"))
+			return
 		}
 		typer, ok := vars["type"]
 		if !ok {
-			web.log.Printf("error: type not in mux.Vars (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, fmt.Errorf("type not in mux.Vars (vars: %v)", mux.Vars(r)))
+			return
 		}
 		id, ok := vars["id"]
 		if !ok {
-			web.log.Printf("error: id not in mux.Vars (vars: %v)", mux.Vars(r))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, fmt.Errorf("id not in mux.Vars (vars: %v)", mux.Vars(r)))
+			return
 		}
 
 		form := NewSearchDonationsForm()
 		if err := DecodeURLParams(r, form); err != nil {
-			web.log.Printf("error: could not decode the url parameters: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
+			web.serverError(w, r, err)
 		}
 
 		// Create a validator and validate the form.
@@ -725,11 +674,7 @@ func (web *WebApp) handlePartialDonationsFind() http.Handler {
 
 		// Render template with errors and return if the form is invalid.
 		if !validator.Valid() {
-			err := templates.ExecuteTemplate(w, name, data)
-			if err != nil {
-				web.log.Printf("Error rendering template %s: %v", name, err)
-				http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-			}
+			web.render(w, r, templates, name, data)
 			return
 		}
 
@@ -744,8 +689,7 @@ func (web *WebApp) handlePartialDonationsFind() http.Handler {
 			form.Offset(),
 		)
 		if err != nil && err != sql.ErrNoRows {
-			log.Printf("error: database GetDonations failed: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			web.serverError(w, r, err)
 			return
 		}
 
@@ -767,12 +711,48 @@ func (web *WebApp) handlePartialDonationsFind() http.Handler {
 		data.Pagination, err = NewPagination(pageLen, recordsNo, form.Page, r.URL.Query())
 		if err != nil {
 			log.Printf("pagination error: %v", err)
+			// web.serverError(w, r, err)
 		}
 
-		err = templates.ExecuteTemplate(w, name, data)
-		if err != nil {
-			web.log.Printf("Error rendering template %s: %v", name, err)
-			http.Error(w, fmt.Sprintf("Error rendering template %s: %v", name, err), http.StatusInternalServerError)
-		}
+		web.render(w, r, templates, name, data)
+
 	})
+}
+
+/* -------------------------------------------------------------------------- */
+// Helpers
+/* -------------------------------------------------------------------------- */
+
+// render renders the specified template.
+func (web *WebApp) render(w http.ResponseWriter, r *http.Request, template *template.Template, filename string, data any) {
+	buf := new(bytes.Buffer)
+	err := template.ExecuteTemplate(buf, filename, data)
+	if err != nil {
+		web.log.Printf("template %q rendering error %v", filename, err)
+		web.serverError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	buf.WriteTo(w)
+}
+
+// serverError logs and return an internal server error. The error should contain the
+// information needed for logging.
+func (web *WebApp) serverError(w http.ResponseWriter, r *http.Request, errs ...error) {
+	err := errors.Join(errs...)
+	web.log.Printf(err.Error(), "method", r.Method, "uri", r.URL.RequestURI())
+	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+// clientError returns a client error.
+func (web *WebApp) clientError(w http.ResponseWriter, message string, status int) {
+	if message == "" {
+		message = http.StatusText(status)
+	}
+	http.Error(w, message, status)
+}
+
+// notfound raises a 404 clientError.
+func (web *WebApp) notFound(w http.ResponseWriter, r *http.Request, message string) {
+	web.clientError(w, message, http.StatusNotFound)
 }

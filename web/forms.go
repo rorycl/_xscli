@@ -1,7 +1,9 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 	"time"
 
@@ -48,6 +50,42 @@ func (v *Validator) Check(ok bool, key, message string) {
 func (v *Validator) FieldError(field string) bool {
 	_, ok := v.Errors[field]
 	return ok
+}
+
+// ------------------------------------------------------------------------------
+// URL query parsing
+// ------------------------------------------------------------------------------
+
+// validQuery checks the url query parameters for the desired keys returning a
+// url.Values map and error.
+func validQuery(thisURL *url.URL, keys ...string) (url.Values, error) {
+	vq, err := url.ParseQuery(thisURL.RawQuery)
+	if err != nil {
+		return nil, fmt.Errorf("url parsequery error: %v", err)
+	}
+	for _, k := range keys {
+		if _, ok := vq[k]; !ok {
+			return nil, fmt.Errorf("%q not in url", k)
+		}
+	}
+	return vq, nil
+}
+
+// ------------------------------------------------------------------------------
+// URL parameter parsing, using gorilla mux.Vars
+// ------------------------------------------------------------------------------
+
+// validMuxVars checks that the required keys are in the url route variable parameters,
+// such as the `id` in
+//
+//	"/invoice/{id:[A-Za-z0-9_-]+}"
+func validMuxVars(vars map[string]string, keys ...string) (map[string]string, error) {
+	for _, key := range keys {
+		if _, ok := vars[key]; !ok {
+			return nil, fmt.Errorf("parameter %q missing", key)
+		}
+	}
+	return vars, nil
 }
 
 // ------------------------------------------------------------------------------
@@ -180,7 +218,7 @@ func newSchemaDecoder() *schema.Decoder {
 func DecodeURLParams(r *http.Request, dst any) error {
 	decoder := newSchemaDecoder()
 	if err := decoder.Decode(dst, r.URL.Query()); err != nil {
-		return err
+		return fmt.Errorf("url parameter decoding error: %v", err)
 	}
 	return nil
 }
